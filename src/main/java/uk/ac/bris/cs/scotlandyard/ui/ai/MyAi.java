@@ -47,7 +47,41 @@ public class MyAi implements Ai {
 					moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
 				}
 			}
-			System.out.println(getShortestPath(board.getSetup().graph, 21, 77));
+			// Iterate through potential moves and find the one with the longest shortest path
+			//int currentShortestPath = 1000;
+			Move moveToDo = moves.get(new Random().nextInt(moves.size()));
+			int currentLongestShortestPath = 0;
+			// Want the maximum minimum distance to a detective
+			for(Move move : moves) {
+				int currentShortestPath = 1000;
+				//List<Integer> shortestPathsToDetectives = new ArrayList<>();
+				for(Piece piece : board.getPlayers()) {
+					if(piece.isDetective()) {
+						int shortestPath = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+						if(shortestPath < currentShortestPath) {
+							currentShortestPath = shortestPath;
+							moveToDo = move;
+						}
+					}
+				}
+				if(currentShortestPath > currentLongestShortestPath) {
+					currentLongestShortestPath = currentShortestPath;
+				}
+				// Collections.sort(shortestPathsToDetectives);
+			}
+
+			for(Piece piece : board.getPlayers()) {
+				if(piece.isDetective()) {
+					for(Move move : moves) {
+						int shortestPath = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+						if(shortestPath > currentShortestPath) {
+							currentShortestPath = shortestPath;
+							moveToDo = move;
+						}
+					}
+				}
+			}
+			return moveToDo;
 		}
 		return moves.get(new Random().nextInt(moves.size()));
 	}
