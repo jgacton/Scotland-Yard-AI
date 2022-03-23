@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nonnull;
 
 
+import com.google.common.collect.ImmutableList;
 import io.atlassian.fugue.Pair;
 import uk.ac.bris.cs.scotlandyard.model.Ai;
 import uk.ac.bris.cs.scotlandyard.model.Board;
@@ -21,26 +22,32 @@ public class MyAi implements Ai {
 
 	@Nonnull @Override public String name() { return "Bubble :)"; }
 
+	// Returns move to be played by the AI
 	@Nonnull @Override public Move pickMove(
 			@Nonnull Board board,
 			Pair<Long, TimeUnit> timeoutPair) {
+
+		// Gets all possible moves in the position from the current game board
 		var moves = board.getAvailableMoves().asList();
+
+		// Any move commenced by MrX => it's MrX's turn
 		if(moves.stream().anyMatch(x -> x.commencedBy().isMrX())) {
-			System.out.println("it is Mr X");
+
+			// Visitor pattern implementation to get destination of MrX move
 			Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-			List<Move> goodMoves = new ArrayList<>();
+			// Iterates through all players
 			for(Piece piece : board.getPlayers()) {
-				final int location;
+
+				final int location; // Stores location of detective
 				if(piece.isDetective()) {
+					// If the piece is a detective
 					location = board.getDetectiveLocation((Piece.Detective) piece).orElseThrow();
-					goodMoves.addAll(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
+					// Filter out moves where the destination is the location of the detective
+					moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
 				}
 			}
-			System.out.println(goodMoves);
-			return goodMoves.get(new Random().nextInt(goodMoves.size()));
-		} else {
-			return moves.get(new Random().nextInt(moves.size()));
 		}
+		return moves.get(new Random().nextInt(moves.size()));
 	}
 
 	/*private ImmutableValueGraph<Integer, Float> generateGameTree() {
