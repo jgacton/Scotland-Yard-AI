@@ -3,7 +3,6 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nonnull;
 
@@ -32,56 +31,44 @@ public class MyAi implements Ai {
 		var moves = board.getAvailableMoves().asList();
 
 		// Any move commenced by MrX => it's MrX's turn
-		if(moves.stream().anyMatch(x -> x.commencedBy().isMrX())) {
+		if (moves.stream().anyMatch(x -> x.commencedBy().isMrX())) {
 
 			// Visitor pattern implementation to get destination of MrX move
 			Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 			// Iterates through all players
-			for(Piece piece : board.getPlayers()) {
+			for (Piece piece : board.getPlayers()) {
 
 				final int location; // Stores location of detective
-				if(piece.isDetective()) {
-					// If the piece is a detective
+				if (piece.isDetective()) {
+					// If the piece is a detective get it's location
 					location = board.getDetectiveLocation((Piece.Detective) piece).orElseThrow();
 					// Filter out moves where the destination is the location of the detective
 					moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
 				}
 			}
-			// Iterate through potential moves and find the one with the longest shortest path
-			//int currentShortestPath = 1000;
-			Move moveToDo = moves.get(new Random().nextInt(moves.size()));
-			int currentLongestShortestPath = 0;
-			// Want the maximum minimum distance to a detective
-			for(Move move : moves) {
-				int currentShortestPath = 1000;
-				//List<Integer> shortestPathsToDetectives = new ArrayList<>();
-				for(Piece piece : board.getPlayers()) {
-					if(piece.isDetective()) {
-						int shortestPath = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-						if(shortestPath < currentShortestPath) {
-							currentShortestPath = shortestPath;
-							moveToDo = move;
-						}
-					}
-				}
-				if(currentShortestPath > currentLongestShortestPath) {
-					currentLongestShortestPath = currentShortestPath;
-				}
-				// Collections.sort(shortestPathsToDetectives);
-			}
+			
+			Move longestShortestShortestPathMove = moves.get(new Random().nextInt(moves.size()));
+			int longestShortestShortestPath = 0;
+			for (Move move : moves) {
 
-			for(Piece piece : board.getPlayers()) {
-				if(piece.isDetective()) {
-					for(Move move : moves) {
-						int shortestPath = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-						if(shortestPath > currentShortestPath) {
-							currentShortestPath = shortestPath;
-							moveToDo = move;
+				Move shortestShortestPathMove = moves.get(new Random().nextInt(moves.size()));
+				int currentShortestPath = 1000;
+
+				for (Piece piece : board.getPlayers()) {
+					if (piece.isDetective()) {
+						int pathLength = getShortestPath(board.getSetup().graph, move.source(), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+						if (pathLength < currentShortestPath) {
+							shortestShortestPathMove = move;
+							currentShortestPath = pathLength;
 						}
 					}
 				}
+
+				if(currentShortestPath > longestShortestShortestPath) {
+					longestShortestShortestPathMove = shortestShortestPathMove;
+				}
 			}
-			return moveToDo;
+			return longestShortestShortestPathMove;
 		}
 		return moves.get(new Random().nextInt(moves.size()));
 	}
@@ -139,31 +126,4 @@ public class MyAi implements Ai {
 
 		return(path.size() - 1);
 	}
-
-	/*private ImmutableValueGraph<Integer, Float> generateGameTree() {
-		return null;
-	}
-
-	private Float miniMax(Integer node, int depth, boolean maximisingPlayer) {
-		if(depth == 0 || !currentBoard.getWinner().isEmpty()) {
-			return getHeuristicValue();
-		}
-		return null;
-	}
-
-	private Float getHeuristicValue(Move move) {
-
-		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-		int destinationFinal = move.accept(getDestinationFinal);
-
-		for(Piece player : this.currentBoard.getPlayers()) {
-			if(player.isDetective()) {
-
-			}
-		}
-
-		return null;
-	}*/
 }
-
-/* How deep to go in game tree, can figure out average number of connections of nodes on game board */
