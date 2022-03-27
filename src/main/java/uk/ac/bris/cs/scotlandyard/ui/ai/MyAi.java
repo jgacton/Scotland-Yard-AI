@@ -29,46 +29,54 @@ public class MyAi implements Ai {
 
 		// Gets all possible moves in the position from the current game board
 		var moves = board.getAvailableMoves().asList();
-
 		// Any move commenced by MrX => it's MrX's turn
 		if (moves.stream().anyMatch(x -> x.commencedBy().isMrX())) {
-
 			// Visitor pattern implementation to get destination of MrX move
 			Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 			// Iterates through all players
 			for (Piece piece : board.getPlayers()) {
-
 				final int location; // Stores location of detective
 				if (piece.isDetective()) {
 					// If the piece is a detective get it's location
 					location = board.getDetectiveLocation((Piece.Detective) piece).orElseThrow();
 					// Filter out moves where the destination is the location of the detective
+					// The way we have implemented getAvailableMoves, surely the moves where the destination is the location of the detective are ignored?
 					moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
 				}
 			}
-			
-			Move longestShortestShortestPathMove = moves.get(new Random().nextInt(moves.size()));
-			int longestShortestShortestPath = 0;
+			Move mrXFurthestAwayFromClosestDetective = moves.get(new Random().nextInt(moves.size()));
+			int mrXFurthestAwayFromClosestDetectivePath = 0;
 			for (Move move : moves) {
-
-				Move shortestShortestPathMove = moves.get(new Random().nextInt(moves.size()));
+				// for each move we get the shortest distance from Mr X destination to the move
+				Move currentMoveClosestDetectiveToX = moves.get(new Random().nextInt(moves.size()));
 				int currentShortestPath = 1000;
-
 				for (Piece piece : board.getPlayers()) {
 					if (piece.isDetective()) {
-						int pathLength = getShortestPath(board.getSetup().graph, move.source(), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+						// find the smallest path from the destination of the move to the detective location
+						int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+						// if the path is smaller than the current shortest path
 						if (pathLength < currentShortestPath) {
-							shortestShortestPathMove = move;
+							// the new currentMoveClosestDetectiveToX is the current move
+							currentMoveClosestDetectiveToX = move;
 							currentShortestPath = pathLength;
 						}
 					}
 				}
-
-				if(currentShortestPath > longestShortestShortestPath) {
-					longestShortestShortestPathMove = shortestShortestPathMove;
+				// the shortest path for a given move from Mr X destination to detective
+				// stores in currentShortestPath
+				// corresponding move stored in currentMoveClosestDetectiveToX
+				// we want the move where Mr X is furthest away from the detective it is closet to
+				// mrXFurthestAwayFromClosestDetectivePath stores the path where Mr X furthest away from detective closest to
+				// cSP stores smallest distance for current move
+				// if this is larger than the current lSSP
+				// then we have found a move where Mr X is further away from detective closest to
+				// and so we set this to be our new move
+				if(currentShortestPath > mrXFurthestAwayFromClosestDetectivePath) {
+					mrXFurthestAwayFromClosestDetectivePath = currentShortestPath;
+					mrXFurthestAwayFromClosestDetective = currentMoveClosestDetectiveToX;
 				}
 			}
-			return longestShortestShortestPathMove;
+			return mrXFurthestAwayFromClosestDetective;
 		}
 		return moves.get(new Random().nextInt(moves.size()));
 	}
