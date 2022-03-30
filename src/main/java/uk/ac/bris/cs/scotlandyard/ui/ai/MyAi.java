@@ -7,6 +7,8 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.graph.MutableValueGraph;
+import com.google.common.graph.ValueGraphBuilder;
 import uk.ac.bris.cs.scotlandyard.model.ScotlandYard.Transport;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -37,28 +39,8 @@ public class MyAi implements Ai {
 		boolean mrxMove = moves.stream().anyMatch(x -> x.commencedBy().isMrX());
 
 		// Need to create a Player for mrX and an immutable list of players for the detectives from the list of pieces
-		// supplied in the board, in order to create a gamestate object, so we can call advance() later
-
-		Player mrx = null;
-		List<Player> detectives = new ArrayList<>();
-		for (Piece piece : board.getPlayers()) {
-			if (piece.isDetective()) {
-				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
-			} else {
-				int mrxLoc = 1;
-				if (mrxMove) {
-					mrxLoc = moves.get(0).source();
-				} else {
-					for(int i = board.getMrXTravelLog().size()-1; i >= 0; i--) {
-						if (board.getMrXTravelLog().get(i).location().isPresent()) {
-							mrxLoc = board.getMrXTravelLog().get(i).location().orElseThrow();
-						}
-					}
-				}
-				mrx = new Player(piece, getPieceTickets(board, piece), mrxLoc);
-			}
-		}
-		Board.GameState currentState = new MyGameStateFactory().build(board.getSetup(), mrx, ImmutableList.copyOf(detectives));
+		// supplied in the board, in order to create a game state object, so we can call advance() later
+		Board.GameState currentState = getStateFromBoard(board, mrxMove);
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
@@ -78,6 +60,35 @@ public class MyAi implements Ai {
 		return moves.get(new Random().nextInt(moves.size()));
 	}
 
+	private boolean isMrXMove(Board board) {
+		var moves = board.getAvailableMoves().asList();
+		return moves.stream().anyMatch(x -> x.commencedBy().isMrX());
+	}
+
+	private Board.GameState getStateFromBoard(Board board, boolean mrxMove) {
+		var moves = board.getAvailableMoves().asList();
+		Player mrx = null;
+		List<Player> detectives = new ArrayList<>();
+		for (Piece piece : board.getPlayers()) {
+			if (piece.isDetective()) {
+				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
+			} else {
+				int mrxLoc = 1;
+				if (mrxMove) {
+					mrxLoc = moves.get(0).source();
+				} else {
+					for(int i = board.getMrXTravelLog().size()-1; i >= 0; i--) {
+						if (board.getMrXTravelLog().get(i).location().isPresent()) {
+							mrxLoc = board.getMrXTravelLog().get(i).location().orElseThrow();
+						}
+					}
+				}
+				mrx = new Player(piece, getPieceTickets(board, piece), mrxLoc);
+			}
+		}
+		return new MyGameStateFactory().build(board.getSetup(), mrx, ImmutableList.copyOf(detectives));
+	}
+
 	private ImmutableMap<ScotlandYard.Ticket, Integer> getPieceTickets(Board board, Piece piece) {
 		Map<ScotlandYard.Ticket, Integer> tickets = new HashMap<>();
 		tickets.put(ScotlandYard.Ticket.DOUBLE, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.DOUBLE));
@@ -88,34 +99,47 @@ public class MyAi implements Ai {
 		return ImmutableMap.copyOf(tickets);
 	}
 
-	// Returns an integer value for the worth of a future gamestate (higher is better for MrX)
+	private MutableValueGraph<Board, Move> gameTree(Board board) {
+		MutableValueGraph<Board, Move> gameTree = ValueGraphBuilder.undirected().build();
+
+		gameTree.addNode(board);
+		for(Move move : board.getAvailableMoves()) {
+			Board.GameState nextState = getStateFromBoard(board, !isMrXMove(board));
+			gameTree.addNode(nextState.advance(move));
+			gameTree.putEdgeValue(board, nextState, move);
+		}
+
+
+		return gameTree;
+	}
+
+	// Returns an integer value for the worth of a future game state (higher is better for MrX)
 	private int evaluateBoard(Board board, Move move) {
 		/*
+		We currently take into account:
+		- If MrX wins in this state, large +ve eval
+		- If detectives win in this state, large -ve eval
+		- Else return the shortest path between MrX and a detective
 		Need to take into account:
-		- Distance from MrX to detectives (higher better)
 		- Tickets available to MrX (higher better, which tickets are most useful?)
 		- Tickets available to detectives (lower better, again type of ticket matters)
 		- Connectedness of MrX location (how fast can he get far away) (higher better, maybe score as number of nodes
-		available in <= 2-4 moves?
+		available in <= 2-4 moves)?
 		- MrX should aim to be on as connected a node as possible on moves where he has to reveal himself
 		 */
-		var moves = board.getAvailableMoves().asList();
-		// Visitor pattern implementation to get destination of MrX move
-		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-		// Iterates through all players
-		for (Piece piece : board.getPlayers()) {
-			final int location; // Stores location of detective
-			if (piece.isDetective()) {
-				// If the piece is a detective get it's location
-				location = board.getDetectiveLocation((Piece.Detective) piece).orElseThrow();
-				// Filter out moves where the destination is the location of the detective
-				// The way we have implemented getAvailableMoves, surely the moves where the destination is the location of the detective are ignored?
-				moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
+
+		if(!board.getWinner().isEmpty()) {
+			if(board.getWinner().stream().anyMatch(Piece::isMrX)) {
+				return 1000000;
 			}
+			return -1000000;
 		}
 
+		// Visitor pattern implementation to get destination of MrX move
+		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+
+		// Iterates through all players
 		// for each move we get the shortest distance from Mr X destination to the move
-		// Move currentMoveClosestDetectiveToX = moves.get(new Random().nextInt(moves.size()));
 		int currentShortestPath = 1000;
 		for (Piece piece : board.getPlayers()) {
 			if (piece.isDetective()) {
@@ -123,20 +147,12 @@ public class MyAi implements Ai {
 				int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
 				// if the path is smaller than the current shortest path
 				if (pathLength < currentShortestPath) {
-					// the new currentMoveClosestDetectiveToX is the current move
 					currentShortestPath = pathLength;
 				}
 			}
 		}
 		// the shortest path for a given move from Mr X destination to detective
 		// stores in currentShortestPath
-		// corresponding move stored in currentMoveClosestDetectiveToX
-		// we want the move where Mr X is the furthest away from the detective it is closet to
-		// mrXFurthestAwayFromClosestDetectivePath stores the path where Mr X is the furthest away from detective closest to
-		// cSP stores the smallest distance for current move
-		// if this is larger than the current lSSP
-		// then we have found a move where Mr X is further away from detective closest to,
-		// and so we set this to be our new move
 		return currentShortestPath;
 	}
 
