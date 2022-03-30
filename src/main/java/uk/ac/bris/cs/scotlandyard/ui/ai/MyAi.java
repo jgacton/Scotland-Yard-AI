@@ -45,7 +45,7 @@ public class MyAi implements Ai {
 			if (piece.isDetective()) {
 				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
 			} else {
-				int mrxLoc = -1;
+				int mrxLoc = 1;
 				if (mrxMove) {
 					mrxLoc = moves.get(0).source();
 				} else {
@@ -66,7 +66,7 @@ public class MyAi implements Ai {
 			Move toDo = moves.get(new Random().nextInt(moves.size()));
 			for(Move move : moves) {
 				Board.GameState nextState = currentState.advance(move);
-				int nextEval = evaluateBoard(nextState);
+				int nextEval = evaluateBoard(nextState, move);
 				if(nextEval > currentEval) {
 					currentEval = nextEval;
 					toDo = move;
@@ -89,7 +89,7 @@ public class MyAi implements Ai {
 	}
 
 	// Returns an integer value for the worth of a future gamestate (higher is better for MrX)
-	private int evaluateBoard(Board board) {
+	private int evaluateBoard(Board board, Move move) {
 		/*
 		Need to take into account:
 		- Distance from MrX to detectives (higher better)
@@ -113,37 +113,31 @@ public class MyAi implements Ai {
 				moves = ImmutableList.copyOf(moves.stream().filter(x -> !x.accept(getDestinationFinal).equals(location)).toList());
 			}
 		}
-		//Move mrXFurthestAwayFromClosestDetective = moves.get(new Random().nextInt(moves.size()));
-		int mrXFurthestAwayFromClosestDetectivePath = 0;
-		for (Move move : moves) {
-			// for each move we get the shortest distance from Mr X destination to the move
-			//Move currentMoveClosestDetectiveToX = moves.get(new Random().nextInt(moves.size()));
-			int currentShortestPath = 1000;
-			for (Piece piece : board.getPlayers()) {
-				if (piece.isDetective()) {
-					// find the smallest path from the destination of the move to the detective location
-					int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-					// if the path is smaller than the current shortest path
-					if (pathLength < currentShortestPath) {
-						// the new currentMoveClosestDetectiveToX is the current move
-						currentShortestPath = pathLength;
-					}
+
+		// for each move we get the shortest distance from Mr X destination to the move
+		// Move currentMoveClosestDetectiveToX = moves.get(new Random().nextInt(moves.size()));
+		int currentShortestPath = 1000;
+		for (Piece piece : board.getPlayers()) {
+			if (piece.isDetective()) {
+				// find the smallest path from the destination of the move to the detective location
+				int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+				// if the path is smaller than the current shortest path
+				if (pathLength < currentShortestPath) {
+					// the new currentMoveClosestDetectiveToX is the current move
+					currentShortestPath = pathLength;
 				}
 			}
-			// the shortest path for a given move from Mr X destination to detective
-			// stores in currentShortestPath
-			// corresponding move stored in currentMoveClosestDetectiveToX
-			// we want the move where Mr X is the furthest away from the detective it is closet to
-			// mrXFurthestAwayFromClosestDetectivePath stores the path where Mr X is the furthest away from detective closest to
-			// cSP stores the smallest distance for current move
-			// if this is larger than the current lSSP
-			// then we have found a move where Mr X is further away from detective closest to,
-			// and so we set this to be our new move
-			if(currentShortestPath > mrXFurthestAwayFromClosestDetectivePath) {
-				mrXFurthestAwayFromClosestDetectivePath = currentShortestPath;
-			}
 		}
-		return mrXFurthestAwayFromClosestDetectivePath;
+		// the shortest path for a given move from Mr X destination to detective
+		// stores in currentShortestPath
+		// corresponding move stored in currentMoveClosestDetectiveToX
+		// we want the move where Mr X is the furthest away from the detective it is closet to
+		// mrXFurthestAwayFromClosestDetectivePath stores the path where Mr X is the furthest away from detective closest to
+		// cSP stores the smallest distance for current move
+		// if this is larger than the current lSSP
+		// then we have found a move where Mr X is further away from detective closest to,
+		// and so we set this to be our new move
+		return currentShortestPath;
 	}
 
 	// Implements Dijkstra's algorithms to return the length of the shortest path between a source and destination node
