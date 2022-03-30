@@ -101,7 +101,9 @@ public class MyAi implements Ai {
 
 	private MutableValueGraph<Board, Move> gameTree(Board board) {
 		MutableValueGraph<Board, Move> gameTree = ValueGraphBuilder.undirected().build();
-
+		/*
+		Try implement a minimax function to work with the one move ahead gametree
+		 */
 		gameTree.addNode(board);
 		for(Move move : board.getAvailableMoves()) {
 			Board.GameState nextState = getStateFromBoard(board, !isMrXMove(board));
