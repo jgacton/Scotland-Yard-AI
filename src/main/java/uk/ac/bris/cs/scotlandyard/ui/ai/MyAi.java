@@ -41,14 +41,8 @@ public class MyAi implements Ai {
 		Player mrx = null;
 		List<Player> detectives = new ArrayList<>();
 		for (Piece piece : board.getPlayers()) {
-			Map<ScotlandYard.Ticket, Integer> tickets = new HashMap<>();
-			tickets.put(ScotlandYard.Ticket.DOUBLE, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.DOUBLE));
-			tickets.put(ScotlandYard.Ticket.BUS, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.BUS));
-			tickets.put(ScotlandYard.Ticket.SECRET, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.SECRET));
-			tickets.put(ScotlandYard.Ticket.TAXI, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.TAXI));
-			tickets.put(ScotlandYard.Ticket.UNDERGROUND, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.UNDERGROUND));
 			if (piece.isDetective()) {
-				detectives.add(new Player(piece, ImmutableMap.copyOf(tickets), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
+				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
 			} else {
 				int mrxLoc = 0;
 				if (moves.stream().anyMatch(x -> x.commencedBy().isMrX())) {
@@ -60,7 +54,7 @@ public class MyAi implements Ai {
 						}
 					}
 				}
-				mrx = new Player(piece, ImmutableMap.copyOf(tickets), mrxLoc);
+				mrx = new Player(piece, getPieceTickets(board, piece), mrxLoc);
 			}
 		}
 		Board.GameState currentState = new MyGameStateFactory().build(board.getSetup(), mrx, ImmutableList.copyOf(detectives));
@@ -116,6 +110,16 @@ public class MyAi implements Ai {
 		}
 		// If it's not MrX's turn, return a random detective move
 		return moves.get(new Random().nextInt(moves.size()));
+	}
+
+	private ImmutableMap<ScotlandYard.Ticket, Integer> getPieceTickets(Board board, Piece piece) {
+		Map<ScotlandYard.Ticket, Integer> tickets = new HashMap<>();
+		tickets.put(ScotlandYard.Ticket.DOUBLE, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.DOUBLE));
+		tickets.put(ScotlandYard.Ticket.BUS, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.BUS));
+		tickets.put(ScotlandYard.Ticket.SECRET, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.SECRET));
+		tickets.put(ScotlandYard.Ticket.TAXI, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.TAXI));
+		tickets.put(ScotlandYard.Ticket.UNDERGROUND, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.UNDERGROUND));
+		return ImmutableMap.copyOf(tickets);
 	}
 
 	// Returns an integer value for the worth of a future gamestate (higher is better for MrX)
