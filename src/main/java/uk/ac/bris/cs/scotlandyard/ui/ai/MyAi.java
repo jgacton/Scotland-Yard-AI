@@ -45,20 +45,24 @@ public class MyAi implements Ai {
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
 			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree(board);
-			//int bestMoveMrX = minimax(currentState, 1, isMrXMove(board), myGameTree, board);
-			//Move moveCausingBest = findingRightSuccessor(currentState, myGameTree, board, bestMoveMrX);
-			//return moveCausingBest;
-			int currentEval = 0;
+			System.out.println(myGameTree.successors((Board.GameState) board));
+			int bestMoveMrX = minimax((Board.GameState) board, 1, isMrXMove(board), myGameTree, board);
+			System.out.println(bestMoveMrX);
+			Move moveCausingBest = findingRightSuccessor((Board.GameState) board, myGameTree, board, bestMoveMrX);
+			System.out.println(moveCausingBest);
 			Move toDo = moves.get(new Random().nextInt(moves.size()));
+			toDo = moveCausingBest;
+			int currentEval = 0;
+			/*
 			for(Move move : moves) {
-				Board.GameState nextState = currentState.advance(move);
+				Board.GameState nextState = ((Board.GameState) board).advance(move);
 				int nextEval = evaluateBoard(nextState, move);
 				//pick the longest shortest path from Mr X to a detective
 				if(nextEval > currentEval) {
 					currentEval = nextEval;
 					toDo = move;
 				}
-			}
+			} */
 			return toDo;
 		}
 		// If it's not MrX's turn, return a random detective move
@@ -75,10 +79,11 @@ public class MyAi implements Ai {
 			gameTree.addNode(nextState);
 			gameTree.putEdgeValue((Board.GameState) board, nextState, move);
 		}
+		System.out.println(gameTree.successors((Board.GameState) board));
 		return gameTree;
 	}
 
-	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board, Move> tree, Board board) {
+	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, Board board) {
 		if(depth == 0) {
 			// return the shortest path from Mr X to the detective for that given move
 			Move whereCameFrom = findingPredecessors(node, tree);
@@ -88,8 +93,10 @@ public class MyAi implements Ai {
 		if(isMrX) {
 			int val = -10000000;
 			depth = depth - 1;
-			for(Board state : tree.successors(node)) {
-				int possibleReplacement = minimax((Board.GameState) state, depth, false, tree, board);
+			//Board.GameState getRandomState = tree.successors(node).stream().toList().get(0);
+			System.out.println(tree.successors(node));
+			for(Board.GameState state : tree.successors(node)) {
+				int possibleReplacement = minimax(state, depth, false, tree, board);
 				if(possibleReplacement > val) {
 					val = possibleReplacement;
 				}
@@ -255,8 +262,8 @@ public class MyAi implements Ai {
 	}
 
 	// finds the move which resulted in the best heuristic
-	private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board, Move> tree, Board board, int mrXMax) {
-		for(Board state : tree.successors(node)) {
+	private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree, Board board, int mrXMax) {
+		for(Board.GameState state : tree.successors(node)) {
 			if((evaluateBoard(board, tree.edgeValue(node, state).orElseThrow())) == (mrXMax)) {
 				return tree.edgeValue(node, state).orElseThrow();
 			}
@@ -265,7 +272,7 @@ public class MyAi implements Ai {
 	}
 
 	// finds the move a node came from in the tree
-	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board, Move> tree) {
+	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree) {
 		Board.GameState stateCameFrom = (Board.GameState) tree.predecessors(node).stream().toList().get(0);
 		return tree.edgeValue(stateCameFrom, node).orElseThrow();
 	}
