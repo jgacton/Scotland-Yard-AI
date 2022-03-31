@@ -38,18 +38,22 @@ public class MyAi implements Ai {
 		var moves = board.getAvailableMoves().asList();
 		boolean mrxMove = moves.stream().anyMatch(x -> x.commencedBy().isMrX());
 
-		// Need to create a Player for mrX and an immutable list of players for the detectives from the list of pieces
-		// supplied in the board, in order to create a game state object, so we can call advance() later
+		// gets the current state from the board
+		// which allows us to call advance which would not have been possible with just the board
 		Board.GameState currentState = getStateFromBoard(board, mrxMove);
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
+			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree(board);
+			//int bestMoveMrX = minimax(currentState, 1, isMrXMove(board), myGameTree, board);
+			//Move moveCausingBest = findingRightSuccessor(currentState, myGameTree, board, bestMoveMrX);
+			//return moveCausingBest;
 			int currentEval = 0;
 			Move toDo = moves.get(new Random().nextInt(moves.size()));
 			for(Move move : moves) {
 				Board.GameState nextState = currentState.advance(move);
 				int nextEval = evaluateBoard(nextState, move);
-				// pick the longest shortest path from Mr X to a detective
+				//pick the longest shortest path from Mr X to a detective
 				if(nextEval > currentEval) {
 					currentEval = nextEval;
 					toDo = move;
@@ -61,62 +65,17 @@ public class MyAi implements Ai {
 		return moves.get(new Random().nextInt(moves.size()));
 	}
 
-	private boolean isMrXMove(Board board) {
-		var moves = board.getAvailableMoves().asList();
-		return moves.stream().anyMatch(x -> x.commencedBy().isMrX());
-	}
-
-	private Board.GameState getStateFromBoard(Board board, boolean mrxMove) {
-		var moves = board.getAvailableMoves().asList();
-		Player mrx = null;
-		List<Player> detectives = new ArrayList<>();
-		for (Piece piece : board.getPlayers()) {
-			if (piece.isDetective()) {
-				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
-			} else {
-				int mrxLoc = 1;
-				if (mrxMove) {
-					mrxLoc = moves.get(0).source();
-				} else {
-					for(int i = board.getMrXTravelLog().size()-1; i >= 0; i--) {
-						if (board.getMrXTravelLog().get(i).location().isPresent()) {
-							mrxLoc = board.getMrXTravelLog().get(i).location().orElseThrow();
-						}
-					}
-				}
-				mrx = new Player(piece, getPieceTickets(board, piece), mrxLoc);
-			}
-		}
-		return new MyGameStateFactory().build(board.getSetup(), mrx, ImmutableList.copyOf(detectives));
-	}
-
-	private ImmutableMap<ScotlandYard.Ticket, Integer> getPieceTickets(Board board, Piece piece) {
-		Map<ScotlandYard.Ticket, Integer> tickets = new HashMap<>();
-		tickets.put(ScotlandYard.Ticket.DOUBLE, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.DOUBLE));
-		tickets.put(ScotlandYard.Ticket.BUS, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.BUS));
-		tickets.put(ScotlandYard.Ticket.SECRET, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.SECRET));
-		tickets.put(ScotlandYard.Ticket.TAXI, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.TAXI));
-		tickets.put(ScotlandYard.Ticket.UNDERGROUND, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.UNDERGROUND));
-		return ImmutableMap.copyOf(tickets);
-	}
-
-	private MutableValueGraph<Board, Move> gameTree(Board board) {
-		MutableValueGraph<Board, Move> gameTree = ValueGraphBuilder.directed().build();
-		/*
-		Try implement a minimax function to work with the one move ahead gametree
-		 */
-		gameTree.addNode(board);
+	// produced a gameTree
+	private MutableValueGraph<Board.GameState, Move> gameTree(Board board) {
+		MutableValueGraph<Board.GameState, Move> gameTree = ValueGraphBuilder.directed().build();
+		gameTree.addNode((Board.GameState) board);
 		for(Move move : board.getAvailableMoves()) {
-			Board.GameState nextState = getStateFromBoard(board, !isMrXMove(board));
-			gameTree.addNode(nextState.advance(move));
-			gameTree.putEdgeValue(board, nextState, move);
+			//Board.GameState nextState = getStateFromBoard(board, !isMrXMove(board));
+			Board.GameState nextState = ((Board.GameState) board).advance(move);
+			gameTree.addNode(nextState);
+			gameTree.putEdgeValue((Board.GameState) board, nextState, move);
 		}
 		return gameTree;
-	}
-
-	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board, Move> tree) {
-		Board.GameState stateCameFrom = (Board.GameState) tree.predecessors(node).stream().toList().get(0);
-		return tree.edgeValue(stateCameFrom, node).orElseThrow();
 	}
 
 	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board, Move> tree, Board board) {
@@ -125,9 +84,10 @@ public class MyAi implements Ai {
 			Move whereCameFrom = findingPredecessors(node, tree);
 			return evaluateBoard(board, whereCameFrom);
 		}
-		// select here the largest shortest path from the ones given 
+		// select here the largest shortest path from the ones given
 		if(isMrX) {
 			int val = -10000000;
+			depth = depth - 1;
 			for(Board state : tree.successors(node)) {
 				int possibleReplacement = minimax((Board.GameState) state, depth, false, tree, board);
 				if(possibleReplacement > val) {
@@ -139,6 +99,7 @@ public class MyAi implements Ai {
 		// select here the shortest shortest path from the ones given
 		else {
 			int val = 10000000;
+			depth = depth - 1;
 			for(Board state : tree.successors(node)) {
 				int possibleReplacement = minimax((Board.GameState) state, depth, true, tree, board);
 				if(possibleReplacement < val) {
@@ -148,6 +109,7 @@ public class MyAi implements Ai {
 			return val;
 		}
 	}
+
 	// Returns an integer value for the worth of a future game state (higher is better for MrX)
 	// currently returns the shortest path from Mr X to a detective for a given move
 	private int evaluateBoard(Board board, Move move) {
@@ -249,4 +211,63 @@ public class MyAi implements Ai {
 
 		return(path.size() - 1);
 	}
+
+	// helper function to check if Mr X move
+	private boolean isMrXMove(Board board) {
+		var moves = board.getAvailableMoves().asList();
+		return moves.stream().anyMatch(x -> x.commencedBy().isMrX());
+	}
+
+	private Board.GameState getStateFromBoard(Board board, boolean mrxMove) {
+		var moves = board.getAvailableMoves().asList();
+		Player mrx = null;
+		List<Player> detectives = new ArrayList<>();
+		// sets required variables to be passed into build later
+		for (Piece piece : board.getPlayers()) {
+			if (piece.isDetective()) {
+				detectives.add(new Player(piece, getPieceTickets(board, piece), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow()));
+			} else {
+				int mrxLoc = 1;
+				if (mrxMove) {
+					mrxLoc = moves.get(0).source();
+				} else {
+					for(int i = board.getMrXTravelLog().size()-1; i >= 0; i--) {
+						if (board.getMrXTravelLog().get(i).location().isPresent()) {
+							mrxLoc = board.getMrXTravelLog().get(i).location().orElseThrow();
+						}
+					}
+				}
+				mrx = new Player(piece, getPieceTickets(board, piece), mrxLoc);
+			}
+		}
+		return new MyGameStateFactory().build(board.getSetup(), mrx, ImmutableList.copyOf(detectives));
+	}
+
+	// helper function for getStateFromBoard
+	private ImmutableMap<ScotlandYard.Ticket, Integer> getPieceTickets(Board board, Piece piece) {
+		Map<ScotlandYard.Ticket, Integer> tickets = new HashMap<>();
+		tickets.put(ScotlandYard.Ticket.DOUBLE, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.DOUBLE));
+		tickets.put(ScotlandYard.Ticket.BUS, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.BUS));
+		tickets.put(ScotlandYard.Ticket.SECRET, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.SECRET));
+		tickets.put(ScotlandYard.Ticket.TAXI, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.TAXI));
+		tickets.put(ScotlandYard.Ticket.UNDERGROUND, board.getPlayerTickets(piece).orElseThrow().getCount(ScotlandYard.Ticket.UNDERGROUND));
+		return ImmutableMap.copyOf(tickets);
+	}
+
+	// finds the move which resulted in the best heuristic
+	private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board, Move> tree, Board board, int mrXMax) {
+		for(Board state : tree.successors(node)) {
+			if((evaluateBoard(board, tree.edgeValue(node, state).orElseThrow())) == (mrXMax)) {
+				return tree.edgeValue(node, state).orElseThrow();
+			}
+		}
+		return tree.edgeValue(node, tree.successors(node).stream().toList().get(0)).orElseThrow();
+	}
+
+	// finds the move a node came from in the tree
+	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board, Move> tree) {
+		Board.GameState stateCameFrom = (Board.GameState) tree.predecessors(node).stream().toList().get(0);
+		return tree.edgeValue(stateCameFrom, node).orElseThrow();
+	}
+
 }
