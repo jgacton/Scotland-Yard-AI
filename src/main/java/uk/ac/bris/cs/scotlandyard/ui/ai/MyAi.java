@@ -49,6 +49,7 @@ public class MyAi implements Ai {
 			for(Move move : moves) {
 				Board.GameState nextState = currentState.advance(move);
 				int nextEval = evaluateBoard(nextState, move);
+				// pick the longest shortest path from Mr X to a detective
 				if(nextEval > currentEval) {
 					currentEval = nextEval;
 					toDo = move;
@@ -100,7 +101,7 @@ public class MyAi implements Ai {
 	}
 
 	private MutableValueGraph<Board, Move> gameTree(Board board) {
-		MutableValueGraph<Board, Move> gameTree = ValueGraphBuilder.undirected().build();
+		MutableValueGraph<Board, Move> gameTree = ValueGraphBuilder.directed().build();
 		/*
 		Try implement a minimax function to work with the one move ahead gametree
 		 */
@@ -110,12 +111,45 @@ public class MyAi implements Ai {
 			gameTree.addNode(nextState.advance(move));
 			gameTree.putEdgeValue(board, nextState, move);
 		}
-
-
 		return gameTree;
 	}
 
+	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board, Move> tree) {
+		Board.GameState stateCameFrom = (Board.GameState) tree.predecessors(node).stream().toList().get(0);
+		return tree.edgeValue(stateCameFrom, node).orElseThrow();
+	}
+
+	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board, Move> tree, Board board) {
+		if(depth == 0) {
+			// return the shortest path from Mr X to the detective for that given move
+			Move whereCameFrom = findingPredecessors(node, tree);
+			return evaluateBoard(board, whereCameFrom);
+		}
+		// select here the largest shortest path from the ones given 
+		if(isMrX) {
+			int val = -10000000;
+			for(Board state : tree.successors(node)) {
+				int possibleReplacement = minimax((Board.GameState) state, depth, false, tree, board);
+				if(possibleReplacement > val) {
+					val = possibleReplacement;
+				}
+			}
+			return val;
+		}
+		// select here the shortest shortest path from the ones given
+		else {
+			int val = 10000000;
+			for(Board state : tree.successors(node)) {
+				int possibleReplacement = minimax((Board.GameState) state, depth, true, tree, board);
+				if(possibleReplacement < val) {
+					val = possibleReplacement;
+				}
+			}
+			return val;
+		}
+	}
 	// Returns an integer value for the worth of a future game state (higher is better for MrX)
+	// currently returns the shortest path from Mr X to a detective for a given move
 	private int evaluateBoard(Board board, Move move) {
 		/*
 		We currently take into account:
