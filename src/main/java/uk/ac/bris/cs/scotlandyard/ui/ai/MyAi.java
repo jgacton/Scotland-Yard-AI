@@ -1,7 +1,6 @@
 package uk.ac.bris.cs.scotlandyard.ui.ai;
 
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
@@ -18,12 +17,8 @@ import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
 import com.google.common.graph.ImmutableValueGraph;
 import uk.ac.bris.cs.scotlandyard.model.*;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Collections;
+
+import java.util.stream.Collectors;
 
 public class MyAi implements Ai {
 
@@ -38,10 +33,6 @@ public class MyAi implements Ai {
 		var moves = board.getAvailableMoves().asList();
 		boolean mrxMove = moves.stream().anyMatch(x -> x.commencedBy().isMrX());
 
-		// gets the current state from the board
-		// which allows us to call advance which would not have been possible with just the board
-		Board.GameState currentState = getStateFromBoard(board, mrxMove);
-
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
 			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree(board);
@@ -50,43 +41,50 @@ public class MyAi implements Ai {
 			System.out.println(bestMoveMrX);
 			Move moveCausingBest = findingRightSuccessor((Board.GameState) board, myGameTree, board, bestMoveMrX);
 			System.out.println(moveCausingBest);
-			Move toDo = moves.get(new Random().nextInt(moves.size()));
-			toDo = moveCausingBest;
-			int currentEval = 0;
-			/*
-			for(Move move : moves) {
-				Board.GameState nextState = ((Board.GameState) board).advance(move);
-				int nextEval = evaluateBoard(nextState, move);
-				//pick the longest shortest path from Mr X to a detective
-				if(nextEval > currentEval) {
-					currentEval = nextEval;
-					toDo = move;
-				}
-			} */
-			return toDo;
+
+			return moveCausingBest;
 		}
 		// If it's not MrX's turn, return a random detective move
 		return moves.get(new Random().nextInt(moves.size()));
 	}
 
 	// produced a gameTree
-	private MutableValueGraph<Board.GameState, Move> gameTree(Board board) {
+	private MutableValueGraph<Board.GameState, Move> gameTree(Board.GameState board, int depth) {
 		MutableValueGraph<Board.GameState, Move> gameTree = ValueGraphBuilder.directed().build();
-		gameTree.addNode((Board.GameState) board);
-		for(Move move : board.getAvailableMoves()) {
-			//Board.GameState nextState = getStateFromBoard(board, !isMrXMove(board));
-			Board.GameState nextState = ((Board.GameState) board).advance(move);
-			gameTree.addNode(nextState);
-			gameTree.putEdgeValue((Board.GameState) board, nextState, move);
+		gameTree.addNode(board);
+
+
+		if(depth == 0) {
+			return gameTree;
 		}
-		System.out.println(gameTree.successors((Board.GameState) board));
+		for(Move move : board.getAvailableMoves()) {
+			gameTree = appendGameTree(gameTree, gameTree((board.advance(move)), depth-1), move);
+		}
 		return gameTree;
+	}
+
+	private MutableValueGraph<Board.GameState, Move> appendGameTree(MutableValueGraph<Board.GameState, Move> parent, MutableValueGraph<Board.GameState, Move> child, Move move) {
+		Board.GameState parentRoot = parent.nodes().stream().filter(x -> parent.inDegree(x) == 0).collect(Collectors.toList()).get(0);
+		Board.GameState childRoot = child.nodes().stream().filter(x -> child.inDegree(x) == 0).collect(Collectors.toList()).get(0);
+
+		for(Board.GameState state : child.nodes()) {
+			parent.addNode(state);
+		}
+		parent.putEdgeValue(parentRoot, childRoot, move);
+
+		for(Board.GameState state : child.nodes()) {
+			if(findingPredecessors(state, child).isPresent()) {
+				parent.putEdgeValue(child.predecessors(state).stream().toList().get(0), state, findingPredecessors(state, child).orElseThrow());
+			}
+		}
+
+		return parent;
 	}
 
 	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, Board board) {
 		if(depth == 0) {
 			// return the shortest path from Mr X to the detective for that given move
-			Move whereCameFrom = findingPredecessors(node, tree);
+			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
 			return evaluateBoard(board, whereCameFrom);
 		}
 		// select here the largest shortest path from the ones given
@@ -272,9 +270,9 @@ public class MyAi implements Ai {
 	}
 
 	// finds the move a node came from in the tree
-	private Move findingPredecessors(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree) {
+	private Optional<Move> findingPredecessors(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree) {
 		Board.GameState stateCameFrom = (Board.GameState) tree.predecessors(node).stream().toList().get(0);
-		return tree.edgeValue(stateCameFrom, node).orElseThrow();
+		return tree.edgeValue(stateCameFrom, node);
 	}
 
 }
