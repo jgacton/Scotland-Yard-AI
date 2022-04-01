@@ -29,7 +29,7 @@ public class MyAi implements Ai {
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
-			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, 1);
+			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, board.getPlayers().size());
 			System.out.println(myGameTree.successors((Board.GameState) board));
 			int bestMoveMrX = minimax((Board.GameState) board, 1, isMrXMove(board), myGameTree, board);
 			System.out.println(bestMoveMrX);
@@ -99,7 +99,7 @@ public class MyAi implements Ai {
 			int val = 10000000;
 			depth = depth - 1;
 			for(Board.GameState state : tree.successors(node)) {
-				int possibleReplacement = minimax(state, depth, true, tree, board);
+				int possibleReplacement = minimax(state, depth, state.getAvailableMoves().stream().anyMatch(x -> x.commencedBy().isMrX()), tree, board);
 				if(possibleReplacement < val) {
 					val = possibleReplacement;
 				}
