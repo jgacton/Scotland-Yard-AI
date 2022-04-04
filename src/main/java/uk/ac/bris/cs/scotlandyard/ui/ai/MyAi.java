@@ -147,9 +147,33 @@ public class MyAi implements Ai {
 				}
 			}
 		}
+
+		/*
+		if(move.commencedBy().isMrX()) {
+			return currentShortestPath + nOrderNeighbours(board, move.accept(getDestinationFinal), 2);
+		}
+		*/
+
 		// the shortest path for a given move from Mr X destination to detective
 		// stores in currentShortestPath
 		return currentShortestPath;
+	}
+
+	// Helper function which gets the number of neighbours of order n of a given node on a given board.
+	// E.g. n = 1 gives the number of immediate neighbours, n = 2 gets the number of immediate neighbours + neighbours
+	// of neighbours.
+	private int nOrderNeighbours(Board board, int node, int n) {
+		int numOfNeighbours = 1;
+
+		if(n == 0) {
+			return numOfNeighbours;
+		}
+
+		for(int neighbour : board.getSetup().graph.adjacentNodes(node)) {
+			numOfNeighbours += nOrderNeighbours(board, neighbour, n-1);
+		}
+
+		return numOfNeighbours;
 	}
 
 	// Implements Dijkstra's algorithms to return the length of the shortest path between a source and destination node
