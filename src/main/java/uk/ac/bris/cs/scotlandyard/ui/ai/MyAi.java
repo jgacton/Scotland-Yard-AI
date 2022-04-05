@@ -2,7 +2,10 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.StreamSupport;
 import javax.annotation.Nonnull;
+
+import com.google.common.collect.Iterators;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import uk.ac.bris.cs.scotlandyard.model.ScotlandYard.Transport;
@@ -143,27 +146,45 @@ public class MyAi implements Ai {
 			if (piece.isDetective()) {
 				// find the smallest path from the destination of the move to the detective location
 				int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-				// if the path is smaller than the current shortest path
-
+				// If shortest path to this detective shorter than paths to previous detectives, update shortest path.
+				// Similarly for longest path.
 				if (pathLength < currentShortestPath) {
 					currentShortestPath = pathLength;
 				} else if (pathLength > currentLongestPath) {
 					currentLongestPath = pathLength;
 				}
 
+				// Increment total distance to all detectives with shortest path to this detective.
 				totalDistanceToDetectives += pathLength;
-				System.out.println(totalDistanceToDetectives);
 			}
 		}
+
 		/*
 		if(move.commencedBy().isMrX()) {
 			return currentShortestPath + nOrderNeighbours(board, move.accept(getDestinationFinal), 2);
 		}
-		*/
+
 
 		// the shortest path for a given move from Mr X destination to detective
 		// stores in currentShortestPath
+
+		for(ScotlandYard.Ticket ticket : move.tickets()) {
+			totalDistanceToDetectives -= getTicketCost(ticket);
+		}
+		*/
+
+		// Return total distance to all detectives, subtracting the range between the closest and furthest detectives away.
 		return totalDistanceToDetectives - (currentLongestPath - currentShortestPath);
+	}
+
+	private int getTicketCost(ScotlandYard.Ticket ticket) {
+		return switch (ticket) {
+			case TAXI -> 1;
+			case BUS -> 3;
+			case UNDERGROUND  -> 3;
+			case SECRET -> 2;
+			case DOUBLE -> 0;
+		};
 	}
 
 	// Helper function which gets the number of neighbours of order n of a given node on a given board.
