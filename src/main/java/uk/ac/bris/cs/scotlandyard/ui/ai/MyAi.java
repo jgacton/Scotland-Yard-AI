@@ -2,10 +2,8 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.StreamSupport;
 import javax.annotation.Nonnull;
 
-import com.google.common.collect.Iterators;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import uk.ac.bris.cs.scotlandyard.model.ScotlandYard.Transport;
@@ -32,7 +30,8 @@ public class MyAi implements Ai {
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
-			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, board.getPlayers().size());
+			MutableValueGraph<Board.GameState, Move> myGameTree = ValueGraphBuilder.directed().build();
+			myGameTree.addNode((Board.GameState) board);
 			System.out.println(myGameTree.successors((Board.GameState) board));
 			int bestMoveMrX = minimax((Board.GameState) board, 1, isMrXMove(board), myGameTree, board);
 			System.out.println(bestMoveMrX);
@@ -82,6 +81,9 @@ public class MyAi implements Ai {
 			// return the shortest path from Mr X to the detective for that given move
 			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
 			return evaluateBoard(board, whereCameFrom);
+		}
+		for(Move move : node.getAvailableMoves()) {
+			appendGameTree(tree, gameTree(node.advance(move), 1), move);
 		}
 		// select here the largest shortest path from the ones given
 		if(isMrX) {
@@ -180,8 +182,7 @@ public class MyAi implements Ai {
 	private int getTicketCost(ScotlandYard.Ticket ticket) {
 		return switch (ticket) {
 			case TAXI -> 1;
-			case BUS -> 3;
-			case UNDERGROUND  -> 3;
+			case BUS, UNDERGROUND -> 3;
 			case SECRET -> 2;
 			case DOUBLE -> 0;
 		};
