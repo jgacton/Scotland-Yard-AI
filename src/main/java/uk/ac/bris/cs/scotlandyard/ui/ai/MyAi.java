@@ -133,21 +133,28 @@ public class MyAi implements Ai {
 
 		// Visitor pattern implementation to get destination of MrX move
 		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+		int totalDistanceToDetectives = 0;
 
 		// Iterates through all players
 		// for each move we get the shortest distance from Mr X destination to the move
 		int currentShortestPath = 1000;
+		int currentLongestPath = 0;
 		for (Piece piece : board.getPlayers()) {
 			if (piece.isDetective()) {
 				// find the smallest path from the destination of the move to the detective location
 				int pathLength = getShortestPath(board.getSetup().graph, move.accept(getDestinationFinal), board.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
 				// if the path is smaller than the current shortest path
+
 				if (pathLength < currentShortestPath) {
 					currentShortestPath = pathLength;
+				} else if (pathLength > currentLongestPath) {
+					currentLongestPath = pathLength;
 				}
+
+				totalDistanceToDetectives += pathLength;
+				System.out.println(totalDistanceToDetectives);
 			}
 		}
-
 		/*
 		if(move.commencedBy().isMrX()) {
 			return currentShortestPath + nOrderNeighbours(board, move.accept(getDestinationFinal), 2);
@@ -156,7 +163,7 @@ public class MyAi implements Ai {
 
 		// the shortest path for a given move from Mr X destination to detective
 		// stores in currentShortestPath
-		return currentShortestPath;
+		return totalDistanceToDetectives - (currentLongestPath - currentShortestPath);
 	}
 
 	// Helper function which gets the number of neighbours of order n of a given node on a given board.
