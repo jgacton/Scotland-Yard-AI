@@ -2,8 +2,11 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import javax.annotation.Nonnull;
 
+import com.google.common.collect.Iterators;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import uk.ac.bris.cs.scotlandyard.model.ScotlandYard.Transport;
@@ -30,13 +33,12 @@ public class MyAi implements Ai {
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
-			MutableValueGraph<Board.GameState, Move> myGameTree = ValueGraphBuilder.directed().build();
-			myGameTree.addNode((Board.GameState) board);
+			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, board.getPlayers().size());
 			System.out.println(myGameTree.successors((Board.GameState) board));
 			int bestMoveMrX = minimax((Board.GameState) board, 1, isMrXMove(board), myGameTree, board);
-			System.out.println(bestMoveMrX);
+			//System.out.println(bestMoveMrX);
 			Move moveCausingBest = findingRightSuccessor((Board.GameState) board, myGameTree, board, bestMoveMrX);
-			System.out.println(moveCausingBest);
+			//System.out.println(moveCausingBest);
 
 			return moveCausingBest;
 		}
@@ -44,16 +46,62 @@ public class MyAi implements Ai {
 		return moves.get(new Random().nextInt(moves.size()));
 	}
 
+	// movesSimplified contains no repetition of locations
+	// chooses the optimal move based on ticket cost from a repetition of moves
+	private Move simplifiedMoves(Set<Move> movesSimplified) {
+		// cost is ticket cost
+		int cost = 10000;
+		// var is dummy variable
+		int var = 0;
+		// move to finalise is optimal move to take
+		Move moveToFinalise = movesSimplified.stream().toList().get(0);
+		// for each move in movesSimplifed
+		for(Move move : movesSimplified) {
+			// we go through the ticket and get a cost
+			for(ScotlandYard.Ticket ticket : move.tickets()) {
+				var = 0;
+				var = getTicketCost(ticket) + var;
+			}
+			// the cheaper the cost the better it is for us
+			if(var < cost) {
+				cost = var;
+				moveToFinalise = move;
+			}
+		}
+		return moveToFinalise;
+	}
+
 	// produced a gameTree
 	private MutableValueGraph<Board.GameState, Move> gameTree(Board.GameState board, int depth) {
 		MutableValueGraph<Board.GameState, Move> gameTree = ValueGraphBuilder.directed().build();
+		// adds current state as root of tree
 		gameTree.addNode(board);
-
-
-		if(depth == 0) {
+		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+		// ending conditions
+		if(depth == 0 || !board.getWinner().isEmpty()) {
 			return gameTree;
 		}
+		// movesToConsider contains moves with no repetition of location
+		Set<Move> movesToConsider = new HashSet<>();
+		// sameDestFinal contains moves with the same end location
+		Set<Move> sameDestFinal = new HashSet<>();
+		// go through each move in all available moves
 		for(Move move : board.getAvailableMoves()) {
+			int destinationFinal = move.accept(getDestinationFinal);
+			// if this moves end destination is not in movesToConsider then this end location has not been considered
+			if(!movesToConsider.stream().anyMatch(x -> x.accept(getDestinationFinal).equals(destinationFinal))) {
+				// we add all moves with this same end location to sameDestFinal
+				sameDestFinal.addAll(board.getAvailableMoves().stream().filter(x -> x.accept(getDestinationFinal).equals(destinationFinal)).collect(Collectors.toSet()));
+				// we choose the optimal move to take
+				Move rightMove = simplifiedMoves(sameDestFinal);
+				// we add this to movesToConsider
+				movesToConsider.add(rightMove);
+			}
+		}
+		// now for each move in moves to consider
+		// we go through the game tree repeating the process
+		for(Move move : movesToConsider) {
+			System.out.println("the moves are as follows : " + move);
 			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1), move);
 		}
 		return gameTree;
@@ -76,14 +124,45 @@ public class MyAi implements Ai {
 
 	}
 
-	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, Board board) {
+	private int minimax2(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, Board board) {
 		if(depth == 0) {
 			// return the shortest path from Mr X to the detective for that given move
 			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
 			return evaluateBoard(board, whereCameFrom);
 		}
-		for(Move move : node.getAvailableMoves()) {
-			appendGameTree(tree, gameTree(node.advance(move), 1), move);
+		// select here the largest shortest path from the ones given
+		if(isMrX) {
+			int val = -10000000;
+			depth = depth - 1;
+			//Board.GameState getRandomState = tree.successors(node).stream().toList().get(0);
+			System.out.println(tree.successors(node));
+			for(Board.GameState state : tree.successors(node)) {
+				int possibleReplacement = minimax(state, depth, false, tree, board);
+				if(possibleReplacement > val) {
+					val = possibleReplacement;
+				}
+			}
+			return val;
+		}
+		// select here the minimum shortest path from the ones given
+		else {
+			int val = 10000000;
+			depth = depth - 1;
+			for(Board.GameState state : tree.successors(node)) {
+				int possibleReplacement = minimax(state, depth, state.getAvailableMoves().stream().anyMatch(x -> x.commencedBy().isMrX()), tree, board);
+				if(possibleReplacement < val) {
+					val = possibleReplacement;
+				}
+			}
+			return val;
+		}
+	}
+
+	private int minimax(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, Board board) {
+		if(depth == 0) {
+			// return the shortest path from Mr X to the detective for that given move
+			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
+			return evaluateBoard(board, whereCameFrom);
 		}
 		// select here the largest shortest path from the ones given
 		if(isMrX) {
@@ -165,11 +244,8 @@ public class MyAi implements Ai {
 		if(move.commencedBy().isMrX()) {
 			return currentShortestPath + nOrderNeighbours(board, move.accept(getDestinationFinal), 2);
 		}
-
-
 		// the shortest path for a given move from Mr X destination to detective
 		// stores in currentShortestPath
-
 		for(ScotlandYard.Ticket ticket : move.tickets()) {
 			totalDistanceToDetectives -= getTicketCost(ticket);
 		}
@@ -182,7 +258,8 @@ public class MyAi implements Ai {
 	private int getTicketCost(ScotlandYard.Ticket ticket) {
 		return switch (ticket) {
 			case TAXI -> 1;
-			case BUS, UNDERGROUND -> 3;
+			case BUS -> 3;
+			case UNDERGROUND  -> 3;
 			case SECRET -> 2;
 			case DOUBLE -> 0;
 		};
