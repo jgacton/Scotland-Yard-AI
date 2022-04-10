@@ -33,10 +33,9 @@ public class MyAi implements Ai {
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
-			MutableValueGraph<Board.GameState, Move> myGameTree2 = gameTreeOriginal((Board.GameState) board, board.getPlayers().size());
-			Set<Move> movesToConsider = new HashSet<>();
-			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, board.getPlayers().size(), movesToConsider);
-			System.out.println(myGameTree.successors((Board.GameState) board));
+			//MutableValueGraph<Board.GameState, Move> myGameTree2 = gameTreeOriginal((Board.GameState) board, board.getPlayers().size());
+			//Set<Move> movesToConsider = new HashSet<>();
+			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, board.getPlayers().size());
 			System.out.println("number of nodes in game tree is " + myGameTree.nodes().size());
 			int bestMoveMrX = minimax((Board.GameState) board, myGameTree.nodes().size(), isMrXMove(board), myGameTree, board);
 			//System.out.println(bestMoveMrX);
@@ -74,8 +73,9 @@ public class MyAi implements Ai {
 	}
 
 	// produced a gameTree
-	private MutableValueGraph<Board.GameState, Move> gameTree(Board.GameState board, int depth, Set<Move> movesToConsider) {
+	private MutableValueGraph<Board.GameState, Move> gameTree(Board.GameState board, int depth) {
 		MutableValueGraph<Board.GameState, Move> gameTree = ValueGraphBuilder.directed().build();
+		Set<Move> movesToConsider = new HashSet<>();
 		// adds current state as root of tree
 		gameTree.addNode(board);
 		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
@@ -103,7 +103,7 @@ public class MyAi implements Ai {
 		// we go through the game tree repeating the process
 		for(Move move : movesToConsider) {
 			System.out.println("the moves are as follows : " + move);
-			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1, movesToConsider), move);
+			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1), move);
 		}
 		return gameTree;
 	}
@@ -150,7 +150,6 @@ public class MyAi implements Ai {
 			int val = -10000000;
 			depth = depth - 1;
 			//Board.GameState getRandomState = tree.successors(node).stream().toList().get(0);
-			System.out.println(tree.successors(node));
 			for(Board.GameState state : tree.successors(node)) {
 				int possibleReplacement = minimaxAlphaBetaPruning(state, depth, false, tree, board, alpha, beta);
 				if(possibleReplacement > val) {
