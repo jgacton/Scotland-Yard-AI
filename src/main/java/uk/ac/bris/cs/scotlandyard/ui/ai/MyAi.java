@@ -136,7 +136,7 @@ public class MyAi implements Ai {
 		System.out.println("THE MOVES TO CONSIDER ARE " + movesToConsider);
 		for(Move move : movesToConsider) {
 			System.out.println("the moves are as follows : " + move);
-			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1), move);
+			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1), move, board);
 		}
 		return gameTree;
 	}
@@ -150,19 +150,19 @@ public class MyAi implements Ai {
 			return gameTree;
 		}
 		for(Move move : board.getAvailableMoves()) {
-			appendGameTree(gameTree, gameTreeOriginal((board.advance(move)), depth - 1), move);
+			appendGameTree(gameTree, gameTreeOriginal((board.advance(move)), depth - 1), move, board);
 		}
 		return gameTree;
 	}
 
-	private void appendGameTree(MutableValueGraph<Board.GameState, Move> parent, MutableValueGraph<Board.GameState, Move> child, Move move) {
-		Board.GameState parentRoot = parent.nodes().stream().filter(x -> parent.inDegree(x) == 0).toList().get(0);
+	private void appendGameTree(MutableValueGraph<Board.GameState, Move> parent, MutableValueGraph<Board.GameState, Move> child, Move move, Board.GameState gameState) {
+		//Board.GameState parentRoot = parent.nodes().stream().filter(x -> parent.inDegree(x) == 0).toList().get(0);
 		Board.GameState childRoot = child.nodes().stream().filter(x -> child.inDegree(x) == 0).toList().get(0);
 
 		for(Board.GameState state : child.nodes()) {
 			parent.addNode(state);
 		}
-		parent.putEdgeValue(parentRoot, childRoot, move);
+		parent.putEdgeValue(gameState, childRoot, move);
 
 		for(Board.GameState state : child.nodes()) {
 			if(findingPredecessors(state, child).isPresent()) {
@@ -178,7 +178,7 @@ public class MyAi implements Ai {
 			return evaluateBoard(board, whereCameFrom);
 		}
 		for(Move move : node.getAvailableMoves()) {
-			appendGameTree(tree, gameTreeOriginal(node.advance(move), 1), move);
+			appendGameTree(tree, gameTreeOriginal(node.advance(move), 1), move, node);
 		}
 		System.out.println("is empty is : " + tree.successors(node).isEmpty());
 		// select here the largest shortest path from the ones given
