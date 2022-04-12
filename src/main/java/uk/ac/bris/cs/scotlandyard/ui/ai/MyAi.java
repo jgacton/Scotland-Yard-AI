@@ -33,15 +33,17 @@ public class MyAi implements Ai {
 
 		// Moves contains MrX move => it's MrX's turn
 		if (mrxMove) {
+			MutableValueGraph<Board.GameState, Move> myGameTree = ValueGraphBuilder.directed().build();
+			myGameTree.addNode((Board.GameState) board);
 			System.out.println("IT IS A MR X MOVE");
 			//MutableValueGraph<Board.GameState, Move> myGameTree2 = gameTreeOriginal((Board.GameState) board, board.getPlayers().size());
 			//Set<Move> movesToConsider = new HashSet<>();
-			MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, 1);
+			//MutableValueGraph<Board.GameState, Move> myGameTree = gameTree((Board.GameState) board, 1);
 			System.out.println("number of nodes in game tree is " + myGameTree.nodes().size());
-			for(Board.GameState ignored : myGameTree.successors((Board.GameState) board)) {
-				System.out.println("SUCCESSOR EXISTS");
-			}
-			int bestMoveMrX = minimax((Board.GameState) board, board.getPlayers().size(), isMrXMove(board), myGameTree, board);
+			//for(Board.GameState ignored : myGameTree.successors((Board.GameState) board)) {
+			//	System.out.println("SUCCESSOR EXISTS");
+			//}
+			int bestMoveMrX = minimaxAlphaBetaPruning((Board.GameState) board, 2, isMrXMove(board), myGameTree, board, -10000, 10000);
 			System.out.println("THE BEST LOCATION IS" + bestMoveMrX);
 			//System.out.println(bestMoveMrX);
 			Move moveCausingBest = findingRightSuccessor((Board.GameState) board, myGameTree, board, bestMoveMrX);
@@ -80,6 +82,8 @@ public class MyAi implements Ai {
 
 	// produced a gameTree
 	private MutableValueGraph<Board.GameState, Move> gameTree(Board.GameState board, int depth) {
+
+		System.out.println("DEPTH OF " + depth);
 		MutableValueGraph<Board.GameState, Move> gameTree = ValueGraphBuilder.directed().build();
 		Set<Move> movesToConsider = new HashSet<>();
 		// adds current state as root of tree
@@ -94,7 +98,8 @@ public class MyAi implements Ai {
 		// go through each move in all available moves
 		System.out.println("THE ALL MOVES ARE " + board.getAvailableMoves());
 		System.out.println(board.getAvailableMoves().size());
-		for(Move move : board.getAvailableMoves()) {
+		Set<Move> initialMoves = board.getAvailableMoves();
+		for(Move move : initialMoves) {
 			System.out.println("THE MOVE IS " + move);
 			int destinationFinal = move.accept(getDestinationFinal);
 			System.out.println("THE DESTINATION FINAL IS " + destinationFinal);
@@ -102,15 +107,16 @@ public class MyAi implements Ai {
 			if(movesToConsider.stream().noneMatch(x -> x.accept(getDestinationFinal).equals(destinationFinal))) {
 				System.out.println("WE ARE IN LOCATION REQUIRED");
 				// we add all moves with this same end location to sameDestFinal
-				/*for(Move moveToCompare : board.getAvailableMoves()) {
+				/* for(Move moveToCompare : board.getAvailableMoves()) {
 					if(moveToCompare.accept(getDestinationFinal) == (destinationFinal)) {
 						System.out.println("The comparison move is " + moveToCompare);
 						System.out.println("The comparison move loc is " + moveToCompare.accept(getDestinationFinal));
 						System.out.println("The dest final is : " + destinationFinal);
 						sameDestFinal.add(moveToCompare);
 					}
-				}*/
+				} */
 				Set<Move> sameDestFinal = board.getAvailableMoves().stream().filter(x -> x.accept(getDestinationFinal).equals(destinationFinal)).collect(Collectors.toSet());
+				initialMoves =  initialMoves.stream().filter(x -> !sameDestFinal.contains(x)).collect(Collectors.toSet());
 				System.out.println("SAME DEST FINAL IS " + sameDestFinal);
 				// we choose the optimal move to take
 				Move rightMove = simplifiedMoves(sameDestFinal);
@@ -123,7 +129,7 @@ public class MyAi implements Ai {
 		// we go through the game tree repeating the process
 		System.out.println("THE MOVES TO CONSIDER ARE " + movesToConsider);
 		for(Move move : movesToConsider) {
-			//System.out.println("the moves are as follows : " + move);
+			System.out.println("the moves are as follows : " + move);
 			appendGameTree(gameTree, gameTree((board.advance(move)), depth - 1), move);
 		}
 		return gameTree;
@@ -165,10 +171,15 @@ public class MyAi implements Ai {
 			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
 			return evaluateBoard(board, whereCameFrom);
 		}
+		for(Move move : node.getAvailableMoves()) {
+			appendGameTree(tree, gameTreeOriginal(node.advance(move), 1), move);
+		}
+		System.out.println("is empty is : " + tree.successors(node).isEmpty());
 		// select here the largest shortest path from the ones given
 		if(isMrX) {
 			int val = -10000000;
 			depth = depth - 1;
+			System.out.println("depth is : " + depth);
 			//Board.GameState getRandomState = tree.successors(node).stream().toList().get(0);
 			for(Board.GameState state : tree.successors(node)) {
 				int possibleReplacement = minimaxAlphaBetaPruning(state, depth, false, tree, board, alpha, beta);
@@ -211,6 +222,7 @@ public class MyAi implements Ai {
 			Move whereCameFrom = findingPredecessors(node, tree).orElseThrow();
 			return evaluateBoard(board, whereCameFrom);
 		}
+
 		// select here the largest shortest path from the ones given
 		if(isMrX) {
 			int val = -10000000;
