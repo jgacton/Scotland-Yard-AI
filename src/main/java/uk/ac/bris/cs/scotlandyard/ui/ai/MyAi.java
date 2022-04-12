@@ -52,6 +52,7 @@ public class MyAi implements Ai {
 			return moveCausingBest;
 		}
 		// If it's not MrX's turn, return a random detective move
+		System.out.println("here");
 		return moves.get(new Random().nextInt(moves.size()));
 	}
 
@@ -181,7 +182,11 @@ public class MyAi implements Ai {
 			depth = depth - 1;
 			System.out.println("depth is : " + depth);
 			//Board.GameState getRandomState = tree.successors(node).stream().toList().get(0);
+			Set<Board.GameState> initialStates = new HashSet<>();
 			for(Board.GameState state : tree.successors(node)) {
+				initialStates.add(state);
+			}
+			for(Board.GameState state : initialStates) {
 				int possibleReplacement = minimaxAlphaBetaPruning(state, depth, false, tree, board, alpha, beta);
 				if(possibleReplacement > val) {
 					val = possibleReplacement;
@@ -192,7 +197,6 @@ public class MyAi implements Ai {
 				if(beta <= alpha) {
 					break;
 				}
-
 			}
 			return val;
 		}
