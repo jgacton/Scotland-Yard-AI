@@ -44,8 +44,13 @@ public class MyAi implements Ai {
 			//	System.out.println("SUCCESSOR EXISTS");
 			//}
 			int bestMoveMrX = minimaxAlphaBetaPruning((Board.GameState) board, 2, isMrXMove(board), myGameTree, board, -10000, 10000);
+			System.out.println("is mr x move double check" + isMrXMove(board));
 			System.out.println("THE BEST LOCATION IS" + bestMoveMrX);
 			//System.out.println(bestMoveMrX);
+			// need to make fRS work for depth > 1
+			for(Board.GameState state : myGameTree.successors((Board.GameState) board)) {
+				System.out.println("edge value in pm is " + myGameTree.edgeValue((Board.GameState) board, state));
+			}
 			Move moveCausingBest = findingRightSuccessor((Board.GameState) board, myGameTree, board, bestMoveMrX);
 			System.out.println("THE BEST MOVE CHOSEN IS" + moveCausingBest);
 			//System.out.println(moveCausingBest);
@@ -187,6 +192,7 @@ public class MyAi implements Ai {
 				initialStates.add(state);
 			}
 			for(Board.GameState state : initialStates) {
+				System.out.println("the edge value is : " + tree.edgeValue(node, state));
 				int possibleReplacement = minimaxAlphaBetaPruning(state, depth, false, tree, board, alpha, beta);
 				if(possibleReplacement > val) {
 					val = possibleReplacement;
@@ -204,7 +210,11 @@ public class MyAi implements Ai {
 		else {
 			int val = 10000000;
 			depth = depth - 1;
+			Set<Board.GameState> initialStates = new HashSet<>();
 			for(Board.GameState state : tree.successors(node)) {
+				initialStates.add(state);
+			}
+			for(Board.GameState state : initialStates) {
 				int possibleReplacement = minimaxAlphaBetaPruning(state, depth, state.getAvailableMoves().stream().anyMatch(x -> x.commencedBy().isMrX()), tree, board, alpha, beta);
 				if(possibleReplacement < val) {
 					val = possibleReplacement;
@@ -411,11 +421,16 @@ public class MyAi implements Ai {
 
 	// finds the move which resulted in the best heuristic
 	private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree, Board board, int mrXMax) {
+		System.out.println("available moves are  : " + node.getAvailableMoves());
 		for(Board.GameState state : tree.successors(node)) {
 			if((evaluateBoard(board, tree.edgeValue(node, state).orElseThrow())) == (mrXMax)) {
+				System.out.println("is in here");
+				System.out.println("edge value is  " + tree.edgeValue(node, state));
+				System.out.println("current state is " + state);
 				return tree.edgeValue(node, state).orElseThrow();
 			}
 		}
+		System.out.println("here before final return");
 		return tree.edgeValue(node, tree.successors(node).stream().toList().get(0)).orElseThrow();
 	}
 
