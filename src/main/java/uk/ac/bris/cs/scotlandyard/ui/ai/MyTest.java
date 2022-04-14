@@ -34,7 +34,7 @@ public class MyTest implements Ai {
             Move bestMove = moves.get(new Random().nextInt(moves.size()));
             int bestEval = 0;
             for(Move move : moves) {
-                int currentEval = minimaxAlphaBetaPruning(state, state.getPlayers().size()*2, true, gameTree, -1000000, 100000);
+                int currentEval = minimaxAlphaBetaPruning(state.advance(move), state.getPlayers().size()*4, true, gameTree, -1000000, 100000);
                 if(currentEval > bestEval) {
                     bestEval = currentEval;
                     bestMove = move;
@@ -43,8 +43,7 @@ public class MyTest implements Ai {
             System.out.println(bestEval + bestMove.toString());
             return bestMove;
         }
-        int bestMoveDetective = minimaxAlphaBetaPruning(state, state.getPlayers().size(), false, gameTree, -1000000, 1000000);
-        return findingRightSuccessor(state, gameTree, bestMoveDetective);
+        return moves.get(new Random().nextInt(moves.size()));
     }
 
     private MutableValueGraph<Board.GameState, Move> gameTreeOfNode(Board.GameState state) {
@@ -63,11 +62,11 @@ public class MyTest implements Ai {
             Move whereCameFrom = tree.edgeValue(tree.predecessors(node).stream().toList().get(0), node).orElseThrow();
             return evaluateBoard(node, whereCameFrom);
         }
+        int val = -1000000;
         for(Move move : node.getAvailableMoves()) {
             Board.GameState nextState = node.advance(move);
-
             appendGameTree(tree, node, move, nextState);
-            int val = -1000000;
+
             if(isMrX) {
                 int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, false, tree, alpha, beta);
                 if(possibleReplacement > val) {
@@ -78,7 +77,7 @@ public class MyTest implements Ai {
                 }
             } else {
                 val = Math.abs(val);
-                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, nextState.getAvailableMoves().stream().anyMatch(x -> x.commencedBy().isMrX()), tree, alpha, beta);
+                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, isMrXMove(nextState), tree, alpha, beta);
                 if(possibleReplacement < val) {
                     val = possibleReplacement;
                 }
@@ -100,10 +99,6 @@ public class MyTest implements Ai {
                 return 1000000;
             }
             return -1000000;
-        }
-
-        if(move.commencedBy().isDetective()) {
-            return 0;
         }
 
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
@@ -192,7 +187,7 @@ public class MyTest implements Ai {
 
     private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree, int mrXMax) {
         for(Board.GameState state : tree.successors(node)) {
-            if(minimaxAlphaBetaPruning(state, state.getPlayers().size()-1, true, tree, -1000000, 100000) == (mrXMax)) {
+            if(minimaxAlphaBetaPruning(state, state.getPlayers().size()*4, true, tree, -1000000, 100000) == (mrXMax)) {
                 return tree.edgeValue(node, state).orElseThrow();
             }
         }
