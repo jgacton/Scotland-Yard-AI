@@ -32,18 +32,37 @@ public class MyTest implements Ai {
 
         if (mrxMove) {
             Move bestMove = moves.get(new Random().nextInt(moves.size()));
-            int bestEval = 0;
+            int bestEval = -1000000;
             for(Move move : moves) {
-                int currentEval = minimaxAlphaBetaPruning(state.advance(move), state.getPlayers().size()*4, true, gameTree, -1000000, 100000);
+                appendGameTree(gameTree, state, move, state.advance(move));
+                int currentEval = minimaxAlphaBetaPruning(state.advance(move), state.getPlayers().size(), true, gameTree, -1000000, 100000);
                 if(currentEval > bestEval) {
                     bestEval = currentEval;
                     bestMove = move;
                 }
             }
-            System.out.println(bestEval + bestMove.toString());
+            System.out.println(bestEval + " " + bestMove.toString());
             return bestMove;
         }
-        return moves.get(new Random().nextInt(moves.size()));
+        List<Piece> detectives = new ArrayList<>();
+        for(Move move : moves) {
+            if(!detectives.contains(move.commencedBy())) {
+                detectives.add(move.commencedBy());
+            }
+        }
+        System.out.println(detectives.size());
+        Move bestMove = moves.get(new Random().nextInt(moves.size()));
+        int bestEval = 1000000;
+        for(Move move : moves) {
+            appendGameTree(gameTree, state, move, state.advance(move));
+            int currentEval = minimaxAlphaBetaPruning(state.advance(move), detectives.size() + (state.getPlayers().size()), false, gameTree, -1000000, 1000000);
+            if(currentEval < bestEval) {
+                bestEval = currentEval;
+                bestMove = move;
+            }
+        }
+        System.out.println(bestEval + " " + bestMove.toString());
+        return bestMove;
     }
 
     private MutableValueGraph<Board.GameState, Move> gameTreeOfNode(Board.GameState state) {
@@ -58,17 +77,54 @@ public class MyTest implements Ai {
     }
 
     private int minimaxAlphaBetaPruning(Board.GameState node, int depth , boolean isMrX, MutableValueGraph<Board.GameState, Move> tree, int alpha, int beta) {
-        if(depth == 0) {
+        if(depth == 0 || !node.getWinner().isEmpty()) {
             Move whereCameFrom = tree.edgeValue(tree.predecessors(node).stream().toList().get(0), node).orElseThrow();
+            System.out.println("Here");
             return evaluateBoard(node, whereCameFrom);
         }
+        if(isMrX) {
+            int maxEval = -1000000;
+            for(Move move : node.getAvailableMoves()) {
+                Board.GameState nextState = node.advance(move);
+                appendGameTree(tree, node, move, nextState);
+                int eval = minimaxAlphaBetaPruning(nextState, depth - 1, false, tree, alpha, beta);
+                if(eval > maxEval) {
+                    maxEval = eval;
+                }
+                if(eval > alpha) {
+                    alpha = eval;
+                }
+                if(beta <= alpha) {
+                    break;
+                }
+            }
+            return maxEval;
+        } else {
+            int minEval = 1000000;
+            for(Move move : node.getAvailableMoves()) {
+                Board.GameState nextState = node.advance(move);
+                appendGameTree(tree, node, move, nextState);
+                int eval = minimaxAlphaBetaPruning(nextState, depth - 1, isMrXMove(nextState), tree, alpha, beta);
+                if(eval < minEval) {
+                    minEval = eval;
+                }
+                if(eval < beta) {
+                    beta = eval;
+                }
+                if(beta <= alpha) {
+                    break;
+                }
+            }
+            return minEval;
+        }
+        /*
         int val = -1000000;
         for(Move move : node.getAvailableMoves()) {
             Board.GameState nextState = node.advance(move);
             appendGameTree(tree, node, move, nextState);
 
             if(isMrX) {
-                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, false, tree, alpha, beta);
+                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, false, tree, alpha, beta).orElseThrow();
                 if(possibleReplacement > val) {
                     val = possibleReplacement;
                 }
@@ -77,23 +133,29 @@ public class MyTest implements Ai {
                 }
             } else {
                 val = Math.abs(val);
-                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, isMrXMove(nextState), tree, alpha, beta);
+                int possibleReplacement = minimaxAlphaBetaPruning(nextState, depth - 1, isMrXMove(nextState), tree, alpha, beta).orElseThrow();
                 if(possibleReplacement < val) {
                     val = possibleReplacement;
                 }
-                if(possibleReplacement <= beta) {
+                if(possibleReplacement < beta) {
                     beta = possibleReplacement;
                 }
             }
             if(beta <= alpha) {
                 break;
             }
-            return val;
         }
-        return 0;
+        if(beta <= alpha) {
+            return Optional.empty();
+        }
+        return Optional.of(val);
+
+         */
     }
 
     private int evaluateBoard(Board.GameState state, Move move) {
+        if(move.commencedBy().isDetective()) System.out.println("Evaluating after detective move");
+
         if(!state.getWinner().isEmpty()) {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
                 return 1000000;
@@ -119,9 +181,11 @@ public class MyTest implements Ai {
 
         int range = currentLongestPath - currentShortestPath;
 
-        System.out.println((4 * currentShortestPath) + (3 * totalDistanceToDetectives) + (2 * getSumAvailableMoves(state)) + range);
+        int evaluation = (4 * currentShortestPath) + (3 * totalDistanceToDetectives) + (2 * getSumAvailableMoves(state)) + range;
 
-        return (4 * currentShortestPath) + (3 * totalDistanceToDetectives) + (2 * getSumAvailableMoves(state)) + range;
+        //System.out.println("Board evaluation is: " + evaluation);
+
+        return evaluation;
     }
 
     private int getShortestPath(ImmutableValueGraph<Integer, ImmutableSet<Transport>> graph, int source, int destination) {
@@ -183,15 +247,6 @@ public class MyTest implements Ai {
 
     private boolean isMrXMove(Board board) {
         return board.getAvailableMoves().asList().stream().anyMatch(x -> x.commencedBy().isMrX());
-    }
-
-    private Move findingRightSuccessor(Board.GameState node, MutableValueGraph<Board.GameState, Move> tree, int mrXMax) {
-        for(Board.GameState state : tree.successors(node)) {
-            if(minimaxAlphaBetaPruning(state, state.getPlayers().size()*4, true, tree, -1000000, 100000) == (mrXMax)) {
-                return tree.edgeValue(node, state).orElseThrow();
-            }
-        }
-        return tree.edgeValue(node, tree.successors(node).stream().toList().get(0)).orElseThrow();
     }
 
     private int getSumAvailableMoves(Board.GameState state) {
