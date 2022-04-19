@@ -1,17 +1,17 @@
 package uk.ac.bris.cs.scotlandyard.ui.ai;
 
-        import java.util.*;
-        import java.util.concurrent.Future;
-        import java.util.concurrent.TimeUnit;
-        import javax.annotation.Nonnull;
+import java.util.*;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.Nonnull;
 
-        import com.google.common.collect.ImmutableList;
-        import io.atlassian.fugue.Pair;
-        import uk.ac.bris.cs.scotlandyard.model.*;
+import com.google.common.collect.ImmutableList;
+import io.atlassian.fugue.Pair;
+import uk.ac.bris.cs.scotlandyard.model.*;
 
-        import java.util.concurrent.*;
+import java.util.concurrent.*;
 
-public class Jarvis implements Ai {
+public class MyTest implements Ai {
     private final Evaluator evaluator = new Evaluator();
     private final Dijkstra dijkstra = Dijkstra.getDijkstra();
 
