@@ -14,6 +14,8 @@ public class NotParallel implements Ai {
     int prunes;
     @Nonnull @Override public String name() { return "Not Parallel"; }
 
+    @Override public void onStart() {}
+
     @Nonnull @Override public Move pickMove(
             @Nonnull Board board,
             Pair<Long, TimeUnit> timeoutPair) {
@@ -21,7 +23,7 @@ public class NotParallel implements Ai {
         prunes = 0;
 
         Board.GameState state = (Board.GameState) board;
-        List<Move> moves = topLevelPruning(state);
+        List<Move> moves = pruneMoves(state);
         Move bestMove = state.getAvailableMoves().asList().get(new Random().nextInt(state.getAvailableMoves().size()));
         boolean isMrXMove = isMrXMove(state);
 
@@ -44,6 +46,15 @@ public class NotParallel implements Ai {
             System.out.println("Calls: " + calls);
             System.out.println("Prunes: " + prunes);
             System.out.println("Moves: " + state.getAvailableMoves().size() + ", Moves evaluated: " + moves.size());
+        } else if(state.getMrXTravelLog().size() >= 3) {
+            List<LogEntry> log = state.getMrXTravelLog();
+            int lastMrXLoc;
+            int i = log.size() - 1;
+            while(log.get(i).location().isEmpty()) {
+                i--;
+            }
+            lastMrXLoc = log.get(i).location().get();
+
         }
         return bestMove;
     }
@@ -54,8 +65,9 @@ public class NotParallel implements Ai {
         }
 
         if(isMrXMove) {
+            List<Move> moves = pruneMoves(state);
             int maxEval = -1000000;
-            for(Move move : state.getAvailableMoves()) {
+            for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
                 this.gameTree.appendGameTree(state, move, nextState);
                 int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
@@ -92,10 +104,9 @@ public class NotParallel implements Ai {
 
     // Prunes top level of moves by removing moves that decrease shortest distance to a detective and duplicate moves
     // with a higher ticket cost.
-    private List<Move> topLevelPruning(Board.GameState state) {
+    private List<Move> pruneMoves(Board.GameState state) {
         List<Move> prunedMoves = new ArrayList<>();
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-        List<Integer> nodesVisited = new ArrayList<>();
         for(Move move : state.getAvailableMoves()) {
             boolean occupied = false;
             for(Piece piece : state.getPlayers()) {
@@ -105,23 +116,24 @@ public class NotParallel implements Ai {
             }
 
             if(!occupied && Evaluator.getShortestPathToDetective(state.advance(move), move.accept(getDestinationFinal)) <= Evaluator.getShortestPathToDetective(state, move.source())) {
-                if(!nodesVisited.contains(move.accept(getDestinationFinal))) {
-                    nodesVisited.add(move.accept(getDestinationFinal));
-                    prunedMoves.add(move);
-                }
+                prunedMoves.add(move);
             }
         }
 
-        List<Move> superPrunedMoves = prunedMoves;
-        for(Move move1 : prunedMoves) {
-            for(Move move2 : prunedMoves) {
+        List<Move> extraPrunedMoves = new ArrayList<>();
+        for(int i = 0; i < prunedMoves.size() - 1; i++) {
+            Move move1 = prunedMoves.get(i);
+            for(int j = i + 1; j < prunedMoves.size(); j++) {
+                Move move2 = prunedMoves.get(j);
                 if(move1.accept(getDestinationFinal).equals(move2.accept(getDestinationFinal))) {
                     if(Evaluator.getTicketCostOfMove(move1) < Evaluator.getTicketCostOfMove(move2)) {
-                        superPrunedMoves.remove(move2);
+                        extraPrunedMoves.add(move1);
                     }
                 }
             }
         }
-        return superPrunedMoves;
+        return extraPrunedMoves;
     }
+
+    @Override public void onTerminate() {}
 }
