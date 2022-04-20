@@ -7,17 +7,8 @@ import uk.ac.bris.cs.scotlandyard.model.ScotlandYard;
 import java.util.*;
 
 public class Dijkstra {
-    private static final Dijkstra dijkstra = new Dijkstra();
 
-    private Dijkstra() {
-
-    }
-
-    public static Dijkstra getDijkstra() {
-        return dijkstra;
-    }
-
-    public int getShortestPath(ImmutableValueGraph<Integer, ImmutableSet<ScotlandYard.Transport>> graph, int source, int destination) {
+    public static int getShortestPath(ImmutableValueGraph<Integer, ImmutableSet<ScotlandYard.Transport>> graph, int source, int destination) {
         if(!(graph.nodes().contains(source) && graph.nodes().contains(destination))) {
             return 1000000;
         }
