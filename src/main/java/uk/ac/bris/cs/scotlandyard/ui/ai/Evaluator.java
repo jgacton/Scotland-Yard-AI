@@ -2,8 +2,9 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import uk.ac.bris.cs.scotlandyard.model.*;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Evaluator {
 
@@ -13,37 +14,65 @@ public class Evaluator {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
                 return 1000000;
             }
-            System.out.println("Detectives win.");
             return -1000000;
         }
 
+        List<Integer> detectiveLocations = getDetectiveLocations(state);
+        var graph = state.getSetup().graph;
+
         if(move.commencedBy().isMrX()) {
             Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-            int totalDistanceToDetectives = 0;
-            int currentShortestPath = 1000;
-            int currentLongestPath = 0;
-            for (Piece piece : state.getPlayers()) {
-                if (piece.isDetective()) {
-                    int pathLength = Dijkstra.getShortestPath(state.getSetup().graph, move.accept(getDestinationFinal), state.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-                    if (pathLength < currentShortestPath) {
-                        currentShortestPath = pathLength;
-                    } else if (pathLength > currentLongestPath) {
-                        currentLongestPath = pathLength;
-                    }
-                    totalDistanceToDetectives += pathLength;
+
+            int totalDistanceToDetectives = getTotalDistanceToDetectives(state, move.accept(getDestinationFinal));
+            int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
+            int availableMoves = getSumAvailableMoves(state);
+
+            return 2 * availableMoves * availableMoves + totalDistanceToDetectives + currentShortestPath;
+        } else { // If we are evaluating after a detective move, return number of possible MrX locations since last time he revealed himself
+            List<LogEntry> logbook = state.getMrXTravelLog().asList();
+
+            if(logbook.size() < 3) {
+                return graph.nodes().size() - state.getPlayers().size() + 1;
+            } else {
+                List<Integer> possibleMrXLocations = new ArrayList<>();
+                List<ScotlandYard.Ticket> ticketsUsed = new ArrayList<>();
+
+                int i = logbook.size() - 1;
+
+                while(logbook.get(i).location().isEmpty()) {
+                    ticketsUsed.add(logbook.get(i).ticket());
+                    i--;
                 }
+
+                Collections.reverse(ticketsUsed);
+                possibleMrXLocations.add(logbook.get(i).location().get());
+
+                for(ScotlandYard.Ticket ticket : ticketsUsed) {
+                    List<Integer> nextPossibleMrXLocations = new ArrayList<>();
+                    for(int j : possibleMrXLocations) {
+                        for(int k : graph.adjacentNodes(j)) {
+                            ScotlandYard.Ticket required = graph.edgeValue(j, k).orElseThrow().asList().get(0).requiredTicket();
+                            if((required.equals(ticket) || required.equals(ScotlandYard.Ticket.SECRET)) && !nextPossibleMrXLocations.contains(k)) {
+                                nextPossibleMrXLocations.add(k);
+                            }
+                        }
+                    }
+                    possibleMrXLocations = new ArrayList<>(List.copyOf(nextPossibleMrXLocations));
+                }
+                possibleMrXLocations = possibleMrXLocations.stream().filter(x -> !detectiveLocations.contains(x)).collect(Collectors.toList());
+
+                int sumShortestDistances = 0;
+
+                for(int mrXLoc : possibleMrXLocations) {
+                    sumShortestDistances += getShortestPathToDetective(state, mrXLoc);
+                }
+
+                return sumShortestDistances;
             }
-
-            int range = currentLongestPath - currentShortestPath;
-
-            return (4 * currentShortestPath * currentShortestPath) + (3 * totalDistanceToDetectives) + (2 * getSumAvailableMoves(state)) + range;
-        } else {
-            //state.getMrXTravelLog().asList().get(0).
-            return 0;
         }
     }
 
-    private static int getSumAvailableMoves(Board.GameState state) {
+    public static int getSumAvailableMoves(Board.GameState state) {
         int sum = 0;
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
         List<Integer> nodesVisited = new ArrayList<>();
@@ -78,6 +107,16 @@ public class Evaluator {
         return currentShortestPath;
     }
 
+    public static int getTotalDistanceToDetectives(Board.GameState state, int mrXLoc) {
+        int totalDistance = 0;
+        for (Piece piece : state.getPlayers()) {
+            if (piece.isDetective()) {
+                totalDistance += Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, state.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+            }
+        }
+        return totalDistance;
+    }
+
     public static int getTicketCost(ScotlandYard.Ticket ticket) {
         return switch (ticket) {
             case TAXI -> 1;
@@ -90,10 +129,19 @@ public class Evaluator {
 
     public static int getTicketCostOfMove(Move move) {
         int sum = 0;
-        Iterator<ScotlandYard.Ticket> iterator = move.tickets().iterator();
-        while(iterator.hasNext()) {
-            sum += getTicketCost(iterator.next());
+        for (ScotlandYard.Ticket ticket : move.tickets()) {
+            sum += getTicketCost(ticket);
         }
         return sum;
+    }
+
+    private static List<Integer> getDetectiveLocations(Board.GameState state) {
+        List<Integer> detectiveLocations = new ArrayList<>();
+        for(Piece piece : state.getPlayers()) {
+            if(piece.isDetective()) {
+                detectiveLocations.add(state.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
+            }
+        }
+        return detectiveLocations;
     }
 }

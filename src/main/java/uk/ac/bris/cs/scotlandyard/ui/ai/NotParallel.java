@@ -3,15 +3,11 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
-
-import com.google.common.collect.ImmutableList;
 import io.atlassian.fugue.Pair;
 import uk.ac.bris.cs.scotlandyard.model.*;
 
 public class NotParallel implements Ai {
     GameTree gameTree;
-    int calls;
-    int prunes;
     @Nonnull @Override public String name() { return "Not Parallel"; }
 
     @Override public void onStart() {}
@@ -19,12 +15,10 @@ public class NotParallel implements Ai {
     @Nonnull @Override public Move pickMove(
             @Nonnull Board board,
             Pair<Long, TimeUnit> timeoutPair) {
-        calls = 0;
-        prunes = 0;
 
         Board.GameState state = (Board.GameState) board;
-        List<Move> moves = pruneMoves(state);
         Move bestMove = state.getAvailableMoves().asList().get(new Random().nextInt(state.getAvailableMoves().size()));
+
         boolean isMrXMove = isMrXMove(state);
 
         if(this.gameTree == null) {
@@ -32,29 +26,49 @@ public class NotParallel implements Ai {
         }
 
         if(isMrXMove) {
+            List<Move> moves = pruneMoves(state);
+
+            if(moves.size() == 1) return moves.get(0);
+
             int bestEval = -1000000;
+
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
+
                 this.gameTree.appendGameTree(state, move, nextState);
-                int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
-                calls++;
+
+                int currentEval = minimax(nextState, state.getPlayers().size() * 2, -1000000, 1000000, isMrXMove(nextState));
+
                 if(currentEval > bestEval) {
                     bestEval = currentEval;
                     bestMove = move;
                 }
             }
-            System.out.println("Calls: " + calls);
-            System.out.println("Prunes: " + prunes);
-            System.out.println("Moves: " + state.getAvailableMoves().size() + ", Moves evaluated: " + moves.size());
-        } else if(state.getMrXTravelLog().size() >= 3) {
-            List<LogEntry> log = state.getMrXTravelLog();
-            int lastMrXLoc;
-            int i = log.size() - 1;
-            while(log.get(i).location().isEmpty()) {
-                i--;
-            }
-            lastMrXLoc = log.get(i).location().get();
+        } else {
+            List<Piece> detectives = new ArrayList<>();
 
+            for(Move move : state.getAvailableMoves()) {
+                if(!detectives.contains(move.commencedBy())) {
+                    detectives.add(move.commencedBy());
+                }
+            }
+
+            int bestEval = 1000000;
+
+            List<Move> moves = pruneExpensiveMoves(state);
+
+            for(Move move : moves) {
+                Board.GameState nextState = state.advance(move);
+
+                this.gameTree.appendGameTree(state, move, nextState);
+
+                int currentEval = minimax(nextState, (state.getPlayers().size() * 2) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
+
+                if(currentEval < bestEval) {
+                    bestEval = currentEval;
+                    bestMove = move;
+                }
+            }
         }
         return bestMove;
     }
@@ -64,75 +78,85 @@ public class NotParallel implements Ai {
             return Evaluator.evaluateBoard(state, this.gameTree.getMoveWhichGenerated(state));
         }
 
-        if(isMrXMove) {
-            List<Move> moves = pruneMoves(state);
-            int maxEval = -1000000;
-            for(Move move : moves) {
-                Board.GameState nextState = state.advance(move);
-                this.gameTree.appendGameTree(state, move, nextState);
-                int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
-                calls++;
-                if(eval > maxEval) maxEval = eval;
+        int bestEval = -1000000;
+        List<Move> moves = pruneExpensiveMoves(state);
+
+        for(Move move : moves) {
+            Board.GameState nextState = state.advance(move);
+
+            this.gameTree.appendGameTree(state, move, nextState);
+
+            int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
+
+            if(isMrXMove) {
+                if(eval > bestEval) bestEval = eval;
                 if(eval > alpha) alpha = eval;
-                if(beta <= alpha) {
-                    prunes++;
-                    break;
-                }
-            }
-            return maxEval;
-        } else {
-            int minEval = -1000000;
-            for(Move move : state.getAvailableMoves()) {
-                Board.GameState nextState = state.advance(move);
-                this.gameTree.appendGameTree(state, move, nextState);
-                calls++;
-                int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
-                if(eval < minEval) minEval = eval;
+            } else {
+                if(eval < Math.abs(bestEval)) bestEval = eval;
                 if(eval < beta) beta = eval;
-                if(beta <= alpha) {
-                    prunes++;
-                    break;
-                }
             }
-            return minEval;
+
+            if(beta <= alpha) break;
         }
+
+        return bestEval;
     }
 
     private boolean isMrXMove(Board.GameState state) {
         return state.getAvailableMoves().asList().stream().anyMatch(x -> x.commencedBy().isMrX());
     }
 
-    // Prunes top level of moves by removing moves that decrease shortest distance to a detective and duplicate moves
-    // with a higher ticket cost.
+    // Don't evaluate moves which decrease distance to detective
+    // Don't evaluate moves which decrease total distance to detectives
     private List<Move> pruneMoves(Board.GameState state) {
-        List<Move> prunedMoves = new ArrayList<>();
+        List<Move> cheapMoves = pruneExpensiveMoves(state);
+
+        if(cheapMoves.size() <= 10) return cheapMoves;
+
+        int currentDistance = Evaluator.getShortestPathToDetective(state, state.getAvailableMoves().asList().get(0).source());
+        int currentTotalDistance = Evaluator.getTotalDistanceToDetectives(state, state.getAvailableMoves().asList().get(0).source());
+
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-        for(Move move : state.getAvailableMoves()) {
-            boolean occupied = false;
-            for(Piece piece : state.getPlayers()) {
-                if(piece.isDetective()) {
-                    if(state.getDetectiveLocation((Piece.Detective) piece).orElseThrow().equals(move.accept(getDestinationFinal))) occupied = true;
-                }
-            }
+        List<Move> prunedMoves = new ArrayList<>(List.copyOf(cheapMoves));
 
-            if(!occupied && Evaluator.getShortestPathToDetective(state.advance(move), move.accept(getDestinationFinal)) <= Evaluator.getShortestPathToDetective(state, move.source())) {
-                prunedMoves.add(move);
-            }
-        }
+        for(Move move : cheapMoves) {
 
-        List<Move> extraPrunedMoves = new ArrayList<>();
-        for(int i = 0; i < prunedMoves.size() - 1; i++) {
-            Move move1 = prunedMoves.get(i);
-            for(int j = i + 1; j < prunedMoves.size(); j++) {
-                Move move2 = prunedMoves.get(j);
-                if(move1.accept(getDestinationFinal).equals(move2.accept(getDestinationFinal))) {
-                    if(Evaluator.getTicketCostOfMove(move1) < Evaluator.getTicketCostOfMove(move2)) {
-                        extraPrunedMoves.add(move1);
-                    }
+            Board.GameState nextState = state.advance(move);
+            int nextDistance = Evaluator.getShortestPathToDetective(nextState, move.accept(getDestinationFinal));
+
+            if(nextDistance < currentDistance) {
+                prunedMoves.remove(move);
+            } else {
+                int nextTotalDistance = Evaluator.getTotalDistanceToDetectives(nextState, move.accept(getDestinationFinal));
+
+                if(nextTotalDistance < currentTotalDistance) {
+                    prunedMoves.remove(move);
                 }
             }
         }
-        return extraPrunedMoves;
+
+        if(prunedMoves.size() == 0) return cheapMoves;
+
+        return prunedMoves;
+    }
+
+    // Don't evaluate moves which have the same destination as another move with cheaper tickers
+    private List<Move> pruneExpensiveMoves(Board.GameState state) {
+        List<Move> moves = state.getAvailableMoves().asList();
+        List<Move> cheapMoves = new ArrayList<>(List.copyOf(moves));
+
+        for(int i = 0; i < moves.size() - 1; i++) {
+            Move move1 = moves.get(i);
+            for(int j = i + 1; j < moves.size(); j++) {
+                Move move2 = moves.get(j);
+
+                if(Evaluator.getTicketCostOfMove(move1) <= Evaluator.getTicketCostOfMove(move2)) {
+                    cheapMoves.remove(move2);
+                }
+            }
+        }
+
+        return cheapMoves;
     }
 
     @Override public void onTerminate() {}
