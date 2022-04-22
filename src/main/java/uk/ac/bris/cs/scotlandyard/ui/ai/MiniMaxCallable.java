@@ -3,6 +3,8 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 public class MiniMaxCallable implements Callable<Integer> {
@@ -116,6 +118,24 @@ public class MiniMaxCallable implements Callable<Integer> {
             }
             return minEval;
         }
+    }
+
+    private List<Move> pruneExpensiveMoves(Board.GameState state) {
+        List<Move> moves = state.getAvailableMoves().asList();
+        List<Move> cheapMoves = new ArrayList<>(List.copyOf(moves));
+
+        for(int i = 0; i < moves.size() - 1; i++) {
+            Move move1 = moves.get(i);
+            for(int j = i + 1; j < moves.size(); j++) {
+                Move move2 = moves.get(j);
+
+                if(Evaluator.getTicketCostOfMove(move1) <= Evaluator.getTicketCostOfMove(move2)) {
+                    cheapMoves.remove(move2);
+                }
+            }
+        }
+
+        return cheapMoves;
     }
 
     private boolean isMrXMove(Board board) {

@@ -9,13 +9,7 @@ public class GameTree {
 
     public GameTree(Board.GameState root) {
         this.tree = ValueGraphBuilder.directed().build();
-        addRootNode(root);
-    }
-
-    private void addRootNode(Board.GameState state) {
-        if(this.tree.nodes().size() == 0) {
-            this.tree.addNode(state);
-        }
+        this.tree.addNode(root);
     }
 
     public void appendGameTree(Board.GameState parentNode, Move move, Board.GameState childNode) {

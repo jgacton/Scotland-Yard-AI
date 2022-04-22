@@ -26,7 +26,8 @@ public class NotParallel implements Ai {
         }
 
         if(isMrXMove) {
-            List<Move> moves = pruneMoves(state);
+            List<Move> moves = pruneExpensiveMoves(state);
+            System.out.println(moves);
 
             if(moves.size() == 1) return moves.get(0);
 
@@ -37,7 +38,7 @@ public class NotParallel implements Ai {
 
                 this.gameTree.appendGameTree(state, move, nextState);
 
-                int currentEval = minimax(nextState, state.getPlayers().size() * 2, -1000000, 1000000, isMrXMove(nextState));
+                int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
 
                 if(currentEval > bestEval) {
                     bestEval = currentEval;
@@ -62,7 +63,7 @@ public class NotParallel implements Ai {
 
                 this.gameTree.appendGameTree(state, move, nextState);
 
-                int currentEval = minimax(nextState, (state.getPlayers().size() * 2) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
+                int currentEval = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
 
                 if(currentEval < bestEval) {
                     bestEval = currentEval;
@@ -70,6 +71,7 @@ public class NotParallel implements Ai {
                 }
             }
         }
+        System.out.println("Move: " + bestMove + ", cost: " + Evaluator.getTicketCostOfMove(bestMove));
         return bestMove;
     }
 
@@ -111,8 +113,6 @@ public class NotParallel implements Ai {
     private List<Move> pruneMoves(Board.GameState state) {
         List<Move> cheapMoves = pruneExpensiveMoves(state);
 
-        if(cheapMoves.size() <= 10) return cheapMoves;
-
         int currentDistance = Evaluator.getShortestPathToDetective(state, state.getAvailableMoves().asList().get(0).source());
         int currentTotalDistance = Evaluator.getTotalDistanceToDetectives(state, state.getAvailableMoves().asList().get(0).source());
 
@@ -142,20 +142,36 @@ public class NotParallel implements Ai {
 
     // Don't evaluate moves which have the same destination as another move with cheaper tickers
     private List<Move> pruneExpensiveMoves(Board.GameState state) {
-        List<Move> moves = state.getAvailableMoves().asList();
-        List<Move> cheapMoves = new ArrayList<>(List.copyOf(moves));
+        Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+        List<Integer> nodesVisited = new ArrayList<>();
+        for(Move move : state.getAvailableMoves()) {
+            boolean occupied = false;
+            for(Piece piece : state.getPlayers()) {
+                if(piece.isDetective()) {
+                    if(state.getDetectiveLocation((Piece.Detective) piece).orElseThrow().equals(move.accept(getDestinationFinal))) occupied = true;
+                }
+            }
 
-        for(int i = 0; i < moves.size() - 1; i++) {
-            Move move1 = moves.get(i);
-            for(int j = i + 1; j < moves.size(); j++) {
-                Move move2 = moves.get(j);
-
-                if(Evaluator.getTicketCostOfMove(move1) <= Evaluator.getTicketCostOfMove(move2)) {
-                    cheapMoves.remove(move2);
+            if(!occupied) {
+                if(!nodesVisited.contains(move.accept(getDestinationFinal))) {
+                    nodesVisited.add(move.accept(getDestinationFinal));
                 }
             }
         }
 
+        List<Move> moves = state.getAvailableMoves().asList();
+        List<Move> cheapMoves = new ArrayList<>();
+        for(int n : nodesVisited) {
+            Move cheapestMove = moves.get(0);
+            int cheapestCost = 10;
+            for(Move move : moves) {
+                if(n == move.accept(getDestinationFinal) && Evaluator.getTicketCostOfMove(move) < cheapestCost) {
+                    cheapestCost = Evaluator.getTicketCostOfMove(move);
+                    cheapestMove = move;
+                }
+            }
+            cheapMoves.add(cheapestMove);
+        }
         return cheapMoves;
     }
 
