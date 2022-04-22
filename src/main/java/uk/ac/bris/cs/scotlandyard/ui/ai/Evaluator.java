@@ -27,7 +27,7 @@ public class Evaluator {
             int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
             int availableMoves = getSumAvailableMoves(state);
 
-            return 2 * availableMoves * availableMoves + totalDistanceToDetectives + currentShortestPath;
+            return (2 * availableMoves * availableMoves) + totalDistanceToDetectives + currentShortestPath;
         } else { // If we are evaluating after a detective move, return number of possible MrX locations since last time he revealed himself
             List<LogEntry> logbook = state.getMrXTravelLog().asList();
 

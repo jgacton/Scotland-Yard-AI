@@ -8,6 +8,7 @@ import uk.ac.bris.cs.scotlandyard.model.*;
 
 public class NotParallel implements Ai {
     GameTree gameTree;
+    int calls;
     @Nonnull @Override public String name() { return "Not Parallel"; }
 
     @Override public void onStart() {}
@@ -21,13 +22,14 @@ public class NotParallel implements Ai {
 
         boolean isMrXMove = isMrXMove(state);
 
+        this.calls = 0;
+
         if(this.gameTree == null) {
             this.gameTree = new GameTree(state);
         }
-
+        List<Move> moves = pruneExpensiveMoves(state);
         if(isMrXMove) {
-            List<Move> moves = pruneExpensiveMoves(state);
-            System.out.println(moves);
+            moves = pruneMoves(state);
 
             if(moves.size() == 1) return moves.get(0);
 
@@ -39,6 +41,7 @@ public class NotParallel implements Ai {
                 this.gameTree.appendGameTree(state, move, nextState);
 
                 int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
+                this.calls++;
 
                 if(currentEval > bestEval) {
                     bestEval = currentEval;
@@ -56,7 +59,7 @@ public class NotParallel implements Ai {
 
             int bestEval = 1000000;
 
-            List<Move> moves = pruneExpensiveMoves(state);
+            //List<Move> moves = pruneExpensiveMoves(state);
 
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
@@ -64,6 +67,7 @@ public class NotParallel implements Ai {
                 this.gameTree.appendGameTree(state, move, nextState);
 
                 int currentEval = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
+                this.calls++;
 
                 if(currentEval < bestEval) {
                     bestEval = currentEval;
@@ -71,6 +75,8 @@ public class NotParallel implements Ai {
                 }
             }
         }
+        System.out.println("Calls: " + this.calls);
+        System.out.println("Moves in position: " + state.getAvailableMoves().size() + ", moves evaluated: " + moves.size());
         System.out.println("Move: " + bestMove + ", cost: " + Evaluator.getTicketCostOfMove(bestMove));
         return bestMove;
     }
@@ -89,6 +95,7 @@ public class NotParallel implements Ai {
             this.gameTree.appendGameTree(state, move, nextState);
 
             int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
+            this.calls++;
 
             if(isMrXMove) {
                 if(eval > bestEval) bestEval = eval;
