@@ -18,8 +18,8 @@ public class NotParallel implements Ai {
             Pair<Long, TimeUnit> timeoutPair) {
 
         Board.GameState state = (Board.GameState) board;
-        Move bestMove = state.getAvailableMoves().asList().get(new Random().nextInt(state.getAvailableMoves().size()));
 
+        Move bestMove = state.getAvailableMoves().asList().get(new Random().nextInt(state.getAvailableMoves().size()));
         boolean isMrXMove = isMrXMove(state);
 
         this.calls = 0;
@@ -27,6 +27,7 @@ public class NotParallel implements Ai {
         if(this.gameTree == null) {
             this.gameTree = new GameTree(state);
         }
+
         List<Move> moves = pruneExpensiveMoves(state);
         if(isMrXMove) {
             moves = pruneMoves(state);
@@ -37,9 +38,8 @@ public class NotParallel implements Ai {
 
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
-
                 this.gameTree.appendGameTree(state, move, nextState);
-
+                BackTracking trackerNextState = new BackTracking(nextState, move, state);
                 int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
                 this.calls++;
 
@@ -63,23 +63,60 @@ public class NotParallel implements Ai {
 
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
-
+                BackTracking trackerNextState = new BackTracking(nextState, move, state);
+                System.out.println("first level " + trackerNextState.getMoveCameFrom());
                 this.gameTree.appendGameTree(state, move, nextState);
-
-                int currentEval = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
+                int currentEval = minimaxTracker(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState), trackerNextState);
+                int currentEval2 = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
                 this.calls++;
-
+                System.out.println("the current eval is : " + currentEval);
+                System.out.println("the second current correct eval is : " + currentEval2);
                 if(currentEval < bestEval) {
                     bestEval = currentEval;
                     bestMove = move;
                 }
             }
         }
-        System.out.println("Calls: " + this.calls);
-        System.out.println("Moves in position: " + state.getAvailableMoves().size() + ", moves evaluated: " + moves.size());
-        System.out.println("Move: " + bestMove + ", cost: " + Evaluator.getTicketCostOfMove(bestMove));
+        // System.out.println("Calls: " + this.calls);
+        // System.out.println("Moves in position: " + state.getAvailableMoves().size() + ", moves evaluated: " + moves.size());
+        // System.out.println("Move: " + bestMove + ", cost: " + Evaluator.getTicketCostOfMove(bestMove));
         return bestMove;
     }
+
+    public int minimaxTracker(Board.GameState state, int depth, int alpha, int beta, boolean isMrXMove, BackTracking tracker) {
+        if(depth == 0 || !state.getWinner().isEmpty()) {
+            System.out.println("the move we came from is and now at depth 0 : " + tracker.getMoveCameFrom());
+            return Evaluator.evaluateBoard(state, tracker.getMoveCameFrom());
+            //return Evaluator.evaluateBoard(state, this.gameTree.getMoveWhichGenerated(state));
+        }
+
+        int bestEval = -1000000;
+        List<Move> moves = pruneExpensiveMoves(state);
+
+        for(Move move : moves) {
+            Board.GameState nextState = state.advance(move);
+            BackTracking trackerForState = new BackTracking(nextState, move, state);
+            this.gameTree.appendGameTree(state, move, nextState);
+            if(depth == 1) {
+                System.out.println("at a depth of 1 we have : " + tracker.getMoveCameFrom());
+            }
+            int eval = minimaxTracker(nextState, depth - 1, alpha, beta, isMrXMove(nextState), trackerForState);
+            this.calls++;
+
+            if(isMrXMove) {
+                if(eval > bestEval) bestEval = eval;
+                if(eval > alpha) alpha = eval;
+            } else {
+                if(eval < Math.abs(bestEval)) bestEval = eval;
+                if(eval < beta) beta = eval;
+            }
+
+            if(beta <= alpha) break;
+        }
+
+        return bestEval;
+    }
+
 
     public int minimax(Board.GameState state, int depth, int alpha, int beta, boolean isMrXMove) {
         if(depth == 0 || !state.getWinner().isEmpty()) {
