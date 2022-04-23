@@ -27,7 +27,8 @@ public class MyGameStateForAI implements Board.GameState {
         this.moveCameFrom = null;
         List<Player> copyOfDet = new ArrayList<>();
         List<Piece> onlyDetPieces = currentState.getPlayers().stream().filter(Piece::isDetective).collect(Collectors.toList());
-        Piece mrXPiece = currentState.getPlayers().stream().filter(Piece::isMrX).collect(Collectors.toList()).get(0);
+        Piece mrXPiece = currentState.getPlayers().stream().filter(Piece::isMrX).collect(Collectors.toList()).get(0);;
+
         int mrXLoc = helpMrXLoc(currentState);
         ImmutableMap<ScotlandYard.Ticket, Integer> ticketsMrX = helpTickets(currentState, mrXPiece);
         this.mrX = new Player(mrXPiece, ticketsMrX, mrXLoc);
@@ -41,11 +42,9 @@ public class MyGameStateForAI implements Board.GameState {
         }
         this.detectives = copyOfDet;
         this.remaining = findRemaining(currentState);
-
     }
 
     private ImmutableSet<Piece> findRemaining(Board.GameState currentState) {
-
         Set<Piece> copyRemaining = new HashSet<>();
         if(currentState.getAvailableMoves().stream().anyMatch(x -> x.commencedBy().isMrX())) {
             copyRemaining.add(this.mrX.piece());
@@ -75,13 +74,28 @@ public class MyGameStateForAI implements Board.GameState {
         return ImmutableMap.copyOf(tickets);
     }
     private int helpMrXLoc(Board.GameState currentState) {
-        if(currentState.getMrXTravelLog().isEmpty()) {
-            return -1;
+        // want to find the earliest location mr x was seen
+        if(currentState.getMrXTravelLog().size() < 3) {
+            return 18;
+        }
+        else{
+            int location = -1;
+            int decrementingCounter = currentState.getMrXTravelLog().size()-1;
+            while(location == -1) {
+                if(currentState.getMrXTravelLog().get(decrementingCounter).location().isEmpty()) {
+                    decrementingCounter--;
+                }
+                else{location = currentState.getMrXTravelLog().get(decrementingCounter).location().orElseThrow();}
+            }
+            return location;
+        }
+        /*if(currentState.getMrXTravelLog().isEmpty()) {
+            return 19;
         }
         if(currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().isEmpty()) {
-            return -1;
+            return 19;
         }
-        else {return currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().orElseThrow(); }
+        else {return currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().orElseThrow(); }*/
     }
     public MyGameStateForAI(
             final GameSetup setup,
@@ -385,7 +399,7 @@ public class MyGameStateForAI implements Board.GameState {
     @Nonnull
     @Override
 
-    public GameState advance(Move move) {
+    public MyGameStateForAI advance(Move move) {
 
         if(!moves.contains(move)) throw new IllegalArgumentException("Illegal move: "+move);
 
@@ -440,6 +454,8 @@ public class MyGameStateForAI implements Board.GameState {
                 Player newMrXUsedTicket2  = newMrXUsedTicket1.use(ticketUsedFinal);
                 Player newMrXUsedDouble = newMrXUsedTicket2.use(ScotlandYard.Ticket.DOUBLE);
                 newMrXChangedLoc =  newMrXUsedDouble.at(destinationFinal);
+                System.out.println("the dest final is " + destinationFinal);
+
             }
 
             // change to detectives turn means remove Mr X from remaining
