@@ -18,7 +18,6 @@ public class MyGameStateForAI implements Board.GameState {
     // state came from and move came from stores the preceding state and move which the current state came from
     private final GameState stateCameFrom;
     private final Move moveCameFrom;
-
     public MyGameStateForAI(Board.GameState currentState) {
         this.setup = currentState.getSetup();
         this.log = currentState.getMrXTravelLog();
@@ -28,7 +27,6 @@ public class MyGameStateForAI implements Board.GameState {
         List<Player> copyOfDet = new ArrayList<>();
         List<Piece> onlyDetPieces = currentState.getPlayers().stream().filter(Piece::isDetective).collect(Collectors.toList());
         Piece mrXPiece = currentState.getPlayers().stream().filter(Piece::isMrX).collect(Collectors.toList()).get(0);;
-
         int mrXLoc = helpMrXLoc(currentState);
         ImmutableMap<ScotlandYard.Ticket, Integer> ticketsMrX = helpTickets(currentState, mrXPiece);
         this.mrX = new Player(mrXPiece, ticketsMrX, mrXLoc);
@@ -74,20 +72,11 @@ public class MyGameStateForAI implements Board.GameState {
         return ImmutableMap.copyOf(tickets);
     }
     private int helpMrXLoc(Board.GameState currentState) {
-        // want to find the earliest location mr x was seen
-        if(currentState.getMrXTravelLog().size() < 3) {
-            return 18;
+        if(currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().isPresent()) {
+            return currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().orElseThrow();
         }
-        else{
-            int location = -1;
-            int decrementingCounter = currentState.getMrXTravelLog().size()-1;
-            while(location == -1) {
-                if(currentState.getMrXTravelLog().get(decrementingCounter).location().isEmpty()) {
-                    decrementingCounter--;
-                }
-                else{location = currentState.getMrXTravelLog().get(decrementingCounter).location().orElseThrow();}
-            }
-            return location;
+        else {
+            
         }
         /*if(currentState.getMrXTravelLog().isEmpty()) {
             return 19;
