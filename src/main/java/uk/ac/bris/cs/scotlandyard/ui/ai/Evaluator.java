@@ -8,8 +8,7 @@ import java.util.stream.Collectors;
 
 public class Evaluator {
 
-    public static int evaluateBoard(Board.GameState state, Move move) {
-
+    public static int evaluateBoard(MyGameStateForAI state, Move move) {
         if(!state.getWinner().isEmpty()) {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
                 return 1000000;
@@ -17,58 +16,39 @@ public class Evaluator {
             return -1000000;
         }
 
-        List<Integer> detectiveLocations = getDetectiveLocations(state);
+        if(move.commencedBy().isMrX()) {
+            return evaluateForMrX(state, move);
+        } else {
+            return evaluateForDetective(state);
+        }
+    }
+
+    public static int evaluateForMrX(MyGameStateForAI state, Move move) {
+        Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+
+        int totalDistanceToDetectives = getTotalDistanceToDetectives(state, move.accept(getDestinationFinal));
+        int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
+        int availableMoves = getSumAvailableMoves(state);
+
+        return (2 * availableMoves * availableMoves) + totalDistanceToDetectives + currentShortestPath;
+    }
+
+    public static int evaluateForDetective(MyGameStateForAI state) {
         var graph = state.getSetup().graph;
 
-        if(move.commencedBy().isMrX()) {
-            Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+        List<LogEntry> logbook = state.getMrXTravelLog().asList();
 
-            int totalDistanceToDetectives = getTotalDistanceToDetectives(state, move.accept(getDestinationFinal));
-            int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
-            int availableMoves = getSumAvailableMoves(state);
+        if(logbook.size() < 3) {
+            return graph.nodes().size() - state.getPlayers().size() + 1;
+        } else {
+            int sumShortestDistances = 0;
+            List<Integer> possibleMrXLocations = state.getPossibleMrXLocations();
 
-            return (2 * availableMoves * availableMoves) + totalDistanceToDetectives + currentShortestPath;
-        } else { // If we are evaluating after a detective move, return number of possible MrX locations since last time he revealed himself
-            List<LogEntry> logbook = state.getMrXTravelLog().asList();
-
-            if(logbook.size() < 3) {
-                return graph.nodes().size() - state.getPlayers().size() + 1;
-            } else {
-                List<Integer> possibleMrXLocations = new ArrayList<>();
-                List<ScotlandYard.Ticket> ticketsUsed = new ArrayList<>();
-
-                int i = logbook.size() - 1;
-
-                while(logbook.get(i).location().isEmpty()) {
-                    ticketsUsed.add(logbook.get(i).ticket());
-                    i--;
-                }
-
-                Collections.reverse(ticketsUsed);
-                possibleMrXLocations.add(logbook.get(i).location().get());
-
-                for(ScotlandYard.Ticket ticket : ticketsUsed) {
-                    List<Integer> nextPossibleMrXLocations = new ArrayList<>();
-                    for(int j : possibleMrXLocations) {
-                        for(int k : graph.adjacentNodes(j)) {
-                            ScotlandYard.Ticket required = graph.edgeValue(j, k).orElseThrow().asList().get(0).requiredTicket();
-                            if((required.equals(ticket) || required.equals(ScotlandYard.Ticket.SECRET)) && !nextPossibleMrXLocations.contains(k)) {
-                                nextPossibleMrXLocations.add(k);
-                            }
-                        }
-                    }
-                    possibleMrXLocations = new ArrayList<>(List.copyOf(nextPossibleMrXLocations));
-                }
-                possibleMrXLocations = possibleMrXLocations.stream().filter(x -> !detectiveLocations.contains(x)).collect(Collectors.toList());
-
-                int sumShortestDistances = 0;
-
-                for(int mrXLoc : possibleMrXLocations) {
-                    sumShortestDistances += getShortestPathToDetective(state, mrXLoc);
-                }
-
-                return sumShortestDistances;
+            for(int mrXLoc : possibleMrXLocations) {
+                sumShortestDistances += getShortestPathToDetective(state, mrXLoc);
             }
+
+            return sumShortestDistances;
         }
     }
 

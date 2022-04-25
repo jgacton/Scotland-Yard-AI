@@ -16,18 +16,21 @@ public class MyGameStateForAI implements Board.GameState {
     private final List<Player> detectives;
     private ImmutableSet<Move> moves;
     // state came from and move came from stores the preceding state and move which the current state came from
-    private final GameState stateCameFrom;
+    private final MyGameStateForAI stateCameFrom;
     private final Move moveCameFrom;
-    public MyGameStateForAI(Board.GameState currentState) {
+
+    private List<Integer> possibleMrXLocations;
+    public MyGameStateForAI(Board.GameState currentState, int mrXLoc) {
         this.setup = currentState.getSetup();
         this.log = currentState.getMrXTravelLog();
         this.moves = currentState.getAvailableMoves();
         this.stateCameFrom = null;
         this.moveCameFrom = null;
+        this.possibleMrXLocations = new ArrayList<>(List.copyOf(currentState.getSetup().graph.nodes().stream().toList()));
         List<Player> copyOfDet = new ArrayList<>();
         List<Piece> onlyDetPieces = currentState.getPlayers().stream().filter(Piece::isDetective).collect(Collectors.toList());
-        Piece mrXPiece = currentState.getPlayers().stream().filter(Piece::isMrX).collect(Collectors.toList()).get(0);;
-        int mrXLoc = helpMrXLoc(currentState);
+        Piece mrXPiece = currentState.getPlayers().stream().filter(Piece::isMrX).collect(Collectors.toList()).get(0);
+        //int mrXLoc = helpMrXLoc(currentState);
         ImmutableMap<ScotlandYard.Ticket, Integer> ticketsMrX = helpTickets(currentState, mrXPiece);
         this.mrX = new Player(mrXPiece, ticketsMrX, mrXLoc);
         for(Piece detPieces : onlyDetPieces) {
@@ -37,9 +40,14 @@ public class MyGameStateForAI implements Board.GameState {
             System.out.println("after disaster");
             Player det = new Player(detPieces, helpTickets(currentState, detPieces), currentState.getDetectiveLocation((Piece.Detective) detPieces).orElseThrow());
             copyOfDet.add(det);
+            this.possibleMrXLocations.remove(currentState.getDetectiveLocation((Piece.Detective) detPieces).orElseThrow());
         }
         this.detectives = copyOfDet;
         this.remaining = findRemaining(currentState);
+    }
+
+    public List<Integer> getPossibleMrXLocations() {
+        return this.possibleMrXLocations;
     }
 
     private ImmutableSet<Piece> findRemaining(Board.GameState currentState) {
@@ -76,7 +84,7 @@ public class MyGameStateForAI implements Board.GameState {
             return currentState.getMrXTravelLog().get(currentState.getMrXTravelLog().size()-1).location().orElseThrow();
         }
         else {
-            
+            return 0;
         }
         /*if(currentState.getMrXTravelLog().isEmpty()) {
             return 19;
@@ -92,8 +100,9 @@ public class MyGameStateForAI implements Board.GameState {
             final ImmutableList<LogEntry> log,
             final Player mrX,
             List<Player> detectives,
-            GameState stateCameFrom,
-            Move moveCameFrom) {
+            MyGameStateForAI stateCameFrom,
+            Move moveCameFrom,
+            List<Integer> possibleMrXLocations) {
 
         this.setup = setup;
         this.remaining = remaining;
@@ -102,6 +111,7 @@ public class MyGameStateForAI implements Board.GameState {
         this.detectives = detectives;
         this.stateCameFrom = stateCameFrom;
         this.moveCameFrom = moveCameFrom;
+        this.possibleMrXLocations = possibleMrXLocations;
 
         if(remaining.contains(mrX.piece())) {
             createMrXMoves();
@@ -410,6 +420,11 @@ public class MyGameStateForAI implements Board.GameState {
             List<LogEntry> logEntry = List.copyOf(this.log);
             Player newMrXChangedLoc;
 
+            List<Integer> possibleMrXLocations = new ArrayList<>();
+            if(this.setup.moves.get(getMrXTravelLog().size())) {
+                possibleMrXLocations.add(destinationFinal);
+            }
+
             if(!isDouble) {
                 // enter the move into the log
                 logEntryFinal = ImmutableList.copyOf(LogMrXMove(logEntry, ticketUsedFinal, destinationFinal));
@@ -419,6 +434,8 @@ public class MyGameStateForAI implements Board.GameState {
 
                 // moves Mr X to their new destination by returning a new Mr X at this destination
                 newMrXChangedLoc =  newMrXUsedTicket.at(destinationFinal);
+
+                if()
             }
             else {
                 // gets the intermediate destination
@@ -458,7 +475,7 @@ public class MyGameStateForAI implements Board.GameState {
             }
 
             // returns a new game state and swaps to the detective turn
-            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), logEntryFinal, newMrXChangedLoc, detectives, this, move);
+            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), logEntryFinal, newMrXChangedLoc, detectives, this, move, possibleMrXLocations);
         }
 
         else {
@@ -502,8 +519,12 @@ public class MyGameStateForAI implements Board.GameState {
                     .collect(Collectors.toList());
             detectivesUpdated.add(currentDetectiveTickLost);
             // the state which the new game state will come from is the current state on which advance is called
-            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), this.log, newMrX, detectivesUpdated, this, move);
+            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), this.log, newMrX, detectivesUpdated, this, move, this.possibleMrXLocations);
         }
+    }
+
+    public MyGameStateForAI revert() {
+        return this.stateCameFrom;
     }
 }
 

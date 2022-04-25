@@ -19,6 +19,7 @@ public class NotParallel implements Ai {
 
         Board.GameState state = (Board.GameState) board;
 
+
         Move bestMove = state.getAvailableMoves().asList().get(new Random().nextInt(state.getAvailableMoves().size()));
         boolean isMrXMove = isMrXMove(state);
 
@@ -39,7 +40,7 @@ public class NotParallel implements Ai {
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
                 this.gameTree.appendGameTree(state, move, nextState);
-                BackTracking trackerNextState = new BackTracking(nextState, move, state);
+                //BackTracking trackerNextState = new BackTracking(nextState, move, state);
                 int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
                 this.calls++;
 
@@ -63,14 +64,14 @@ public class NotParallel implements Ai {
 
             for(Move move : moves) {
                 Board.GameState nextState = state.advance(move);
-                BackTracking trackerNextState = new BackTracking(nextState, move, state);
-                System.out.println("first level " + trackerNextState.getMoveCameFrom());
+                //BackTracking trackerNextState = new BackTracking(nextState, move, state);
+                //System.out.println("first level " + trackerNextState.getMoveCameFrom());
                 this.gameTree.appendGameTree(state, move, nextState);
-                int currentEval = minimaxTracker(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState), trackerNextState);
-                int currentEval2 = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
+                //int currentEval = minimaxTracker(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState), trackerNextState);
+                int currentEval = minimax(nextState, (state.getPlayers().size()) + detectives.size(), -1000000, 1000000, isMrXMove(nextState));
                 this.calls++;
                 System.out.println("the current eval is : " + currentEval);
-                System.out.println("the second current correct eval is : " + currentEval2);
+                //System.out.println("the second current correct eval is : " + currentEval2);
                 if(currentEval < bestEval) {
                     bestEval = currentEval;
                     bestMove = move;
@@ -120,7 +121,8 @@ public class NotParallel implements Ai {
 
     public int minimax(Board.GameState state, int depth, int alpha, int beta, boolean isMrXMove) {
         if(depth == 0 || !state.getWinner().isEmpty()) {
-            return Evaluator.evaluateBoard(state, this.gameTree.getMoveWhichGenerated(state));
+            Move precedingMove = this.gameTree.getMoveWhichGenerated(state);
+            return Evaluator.evaluateBoard(state, precedingMove);
         }
 
         int bestEval = -1000000;
