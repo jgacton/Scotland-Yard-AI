@@ -435,7 +435,13 @@ public class MyGameStateForAI implements Board.GameState {
                 // moves Mr X to their new destination by returning a new Mr X at this destination
                 newMrXChangedLoc =  newMrXUsedTicket.at(destinationFinal);
 
-                if()
+                for(int location : this.possibleMrXLocations) {
+                    for(int adjacent : this.setup.graph.adjacentNodes(location)) {
+                        if(this.setup.graph.edgeValue(location, adjacent).equals(ticketUsedFinal) && !possibleMrXLocations.contains(adjacent)) {
+                            possibleMrXLocations.add(adjacent);
+                        }
+                    }
+                }
             }
             else {
                 // gets the intermediate destination
@@ -462,6 +468,17 @@ public class MyGameStateForAI implements Board.GameState {
                 newMrXChangedLoc =  newMrXUsedDouble.at(destinationFinal);
                 System.out.println("the dest final is " + destinationFinal);
 
+                for(int location : this.possibleMrXLocations) {
+                    for(int intermediate : this.setup.graph.adjacentNodes(location)) {
+                        if(this.setup.graph.edgeValue(location, intermediate).equals(ticketUsedIntermediate)) {
+                            for(int adjacent : this.setup.graph.adjacentNodes(intermediate)) {
+                                if(this.setup.graph.edgeValue(intermediate, adjacent).equals(ticketUsedFinal) && !possibleMrXLocations.contains(adjacent)) {
+                                    possibleMrXLocations.add(adjacent);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // change to detectives turn means remove Mr X from remaining
@@ -472,6 +489,9 @@ public class MyGameStateForAI implements Board.GameState {
 
             for(Player detective : detectives) {
                 remainingUpdated.add(detective.piece());
+                if(possibleMrXLocations.contains(detective.location())) {
+                    possibleMrXLocations.remove(detective.location());
+                }
             }
 
             // returns a new game state and swaps to the detective turn
@@ -518,8 +538,12 @@ public class MyGameStateForAI implements Board.GameState {
                     .filter(d -> !d.equals(currentDetective))
                     .collect(Collectors.toList());
             detectivesUpdated.add(currentDetectiveTickLost);
+
+            List<Integer> possibleMrXLocations = new ArrayList<>(List.copyOf(this.possibleMrXLocations));
+            if(possibleMrXLocations.contains(destinationFinal)) possibleMrXLocations.remove(destinationFinal);
+
             // the state which the new game state will come from is the current state on which advance is called
-            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), this.log, newMrX, detectivesUpdated, this, move, this.possibleMrXLocations);
+            return new MyGameStateForAI(setup, ImmutableSet.copyOf(remainingUpdated), this.log, newMrX, detectivesUpdated, this, move, possibleMrXLocations);
         }
     }
 

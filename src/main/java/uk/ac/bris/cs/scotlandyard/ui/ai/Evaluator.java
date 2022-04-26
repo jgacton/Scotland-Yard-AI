@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 
 public class Evaluator {
 
-    public static int evaluateBoard(MyGameStateForAI state, Move move) {
+    public static int evaluateBoard(MyGameStateForAI state) {
         if(!state.getWinner().isEmpty()) {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
                 return 1000000;
@@ -16,15 +16,16 @@ public class Evaluator {
             return -1000000;
         }
 
-        if(move.commencedBy().isMrX()) {
-            return evaluateForMrX(state, move);
+        if(state.getMoveCameFrom().commencedBy().isMrX()) {
+            return evaluateForMrX(state);
         } else {
             return evaluateForDetective(state);
         }
     }
 
-    public static int evaluateForMrX(MyGameStateForAI state, Move move) {
+    public static int evaluateForMrX(MyGameStateForAI state) {
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
+        Move move = state.getMoveCameFrom();
 
         int totalDistanceToDetectives = getTotalDistanceToDetectives(state, move.accept(getDestinationFinal));
         int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
