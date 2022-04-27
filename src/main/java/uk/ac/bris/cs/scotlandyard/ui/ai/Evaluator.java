@@ -1,14 +1,11 @@
 package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import uk.ac.bris.cs.scotlandyard.model.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.*;
 
 public class Evaluator {
 
-    public static int evaluateBoard(MyGameStateForAI state) {
+    public static int evaluateBoard(Board.GameState state, Move precedingMove) {
         if(!state.getWinner().isEmpty()) {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
                 return 1000000;
@@ -16,25 +13,27 @@ public class Evaluator {
             return -1000000;
         }
 
-        if(state.getMoveCameFrom().commencedBy().isMrX()) {
-            return evaluateForMrX(state);
+        if(precedingMove.commencedBy().isMrX()) {
+            return evaluateForMrX(state, precedingMove);
         } else {
-            return evaluateForDetective(state);
+            int evaluation = evaluateForDetective(state);
+            System.out.println("Evaluating after detective move: " + evaluation);
+            return evaluation;
         }
     }
 
-    public static int evaluateForMrX(MyGameStateForAI state) {
+    public static int evaluateForMrX(Board.GameState state, Move precedingMove) {
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
-        Move move = state.getMoveCameFrom();
 
-        int totalDistanceToDetectives = getTotalDistanceToDetectives(state, move.accept(getDestinationFinal));
-        int currentShortestPath = getShortestPathToDetective(state, move.accept(getDestinationFinal));
+        int currentShortestPath = getShortestPathToDetective(state, precedingMove.accept(getDestinationFinal));
+        if(state.getSetup().moves.get(state.getMrXTravelLog().size() - 1) && currentShortestPath == 1) return -1000000;
+        int totalDistanceToDetectives = getTotalDistanceToDetectives(state, precedingMove.accept(getDestinationFinal));
         int availableMoves = getSumAvailableMoves(state);
 
-        return (2 * availableMoves * availableMoves) + totalDistanceToDetectives + currentShortestPath;
+        return availableMoves + totalDistanceToDetectives + currentShortestPath;
     }
 
-    public static int evaluateForDetective(MyGameStateForAI state) {
+    public static int evaluateForDetective(Board.GameState state) {
         var graph = state.getSetup().graph;
 
         List<LogEntry> logbook = state.getMrXTravelLog().asList();
@@ -42,14 +41,13 @@ public class Evaluator {
         if(logbook.size() < 3) {
             return graph.nodes().size() - state.getPlayers().size() + 1;
         } else {
-            int sumShortestDistances = 0;
-            List<Integer> possibleMrXLocations = state.getPossibleMrXLocations();
-
-            for(int mrXLoc : possibleMrXLocations) {
-                sumShortestDistances += getShortestPathToDetective(state, mrXLoc);
+            int i = logbook.size() - 1;
+            while(logbook.get(i).location().isEmpty()) {
+                i--;
             }
+            int lastMrXLocation = logbook.get(i).location().get();
 
-            return sumShortestDistances;
+            return getTotalDistanceToDetectives(state, lastMrXLocation);
         }
     }
 
@@ -77,23 +75,19 @@ public class Evaluator {
 
     public static int getShortestPathToDetective(Board.GameState state, int mrXLoc) {
         int currentShortestPath = 1000;
-        for (Piece piece : state.getPlayers()) {
-            if (piece.isDetective()) {
-                int pathLength = Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, state.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-                if (pathLength < currentShortestPath) {
-                    currentShortestPath = pathLength;
-                }
-            }
+        List<Integer> detectiveLocations = getDetectiveLocations(state);
+        for(int location : detectiveLocations) {
+            int pathLength = Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, location);
+            if(pathLength < currentShortestPath) currentShortestPath = pathLength;
         }
         return currentShortestPath;
     }
 
     public static int getTotalDistanceToDetectives(Board.GameState state, int mrXLoc) {
         int totalDistance = 0;
-        for (Piece piece : state.getPlayers()) {
-            if (piece.isDetective()) {
-                totalDistance += Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, state.getDetectiveLocation((Piece.Detective) piece).orElseThrow());
-            }
+        List<Integer> detectiveLocations = getDetectiveLocations(state);
+        for (int location : detectiveLocations) {
+            totalDistance += Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, location);
         }
         return totalDistance;
     }

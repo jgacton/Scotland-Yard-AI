@@ -140,7 +140,7 @@ public class AIForGameState implements  Ai{
 
     public int minimax(int depth, int alpha, int beta, boolean isMrXMove) {
         if(depth == 0 || !currentState.getWinner().isEmpty()) {
-            return Evaluator.evaluateBoard(currentState);
+            return Evaluator.evaluateBoard(currentState, currentState.getMoveCameFrom());
         }
 
         int bestEval = -1000000;
