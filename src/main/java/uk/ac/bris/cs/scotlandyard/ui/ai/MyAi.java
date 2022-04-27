@@ -8,7 +8,7 @@ import uk.ac.bris.cs.scotlandyard.model.*;
 
 public class MyAi implements Ai {
 	GameTree gameTree;
-
+	Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 	@Nonnull @Override public String name() { return "Bubble :)"; }
 
 	// Returns move to be played by the AI
@@ -17,11 +17,13 @@ public class MyAi implements Ai {
 			Pair<Long, TimeUnit> timeoutPair) {
 
 		Board.GameState state = (Board.GameState) board;
-		List<Move> moves = pruneExpensiveAndDuplicateMoves(state);
+		boolean isMrXMove = isMrXMove(state);
+		List<Move> moves;
+		if(isMrXMove) moves = pruneMrXMoves(state);
+		else moves = pruneDetectiveMoves(state);
 		if(moves.size() == 1) return moves.get(0);
 
 		Move bestMove = moves.get(new Random().nextInt(moves.size()));
-		boolean isMrXMove = isMrXMove(state);
 
 		this.gameTree = new GameTree(state);
 		int bestEval = -1000000;
@@ -51,7 +53,9 @@ public class MyAi implements Ai {
 		}
 
 		int bestEval = -1000000;
-		List<Move> moves = pruneExpensiveAndDuplicateMoves(state);
+		List<Move> moves;
+		if(isMrXMove) moves = pruneMrXMoves(state);
+		else moves = pruneDetectiveMoves(state);
 
 		for(Move move : moves) {
 			Board.GameState nextState = state.advance(move);
@@ -73,7 +77,6 @@ public class MyAi implements Ai {
 	}
 
 	private List<Move> pruneExpensiveAndDuplicateMoves(Board.GameState state) {
-		Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 		List<Integer> nodesVisited = new ArrayList<>();
 		List<Move> movesToPrune = new ArrayList<>(List.copyOf(state.getAvailableMoves()));
 		// Gets list of unique destination nodes for all moves in this state
@@ -106,9 +109,39 @@ public class MyAi implements Ai {
 		return cheapMoves;
 	}
 
+	private List<Move> pruneMrXMoves(Board.GameState state) {
+		List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+		List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+		int currentShortestDistanceToDetective = Evaluator.getShortestPathToDetective(state, uniqueMoves.get(0).source());
+
+		for(Move move : uniqueMoves) {
+			if(Evaluator.getTotalDistanceToDetectives(state.advance(move), move.accept(getDestinationFinal)) < currentShortestDistanceToDetective) {
+				movesToEvaluate.remove(move);
+			}
+		}
+
+		if(movesToEvaluate.size() > 0) return movesToEvaluate;
+		return uniqueMoves;
+	}
+
+	private List<Move> pruneDetectiveMoves(Board.GameState state) {
+		List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+		List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+		if(state.getMrXTravelLog().size() < 3) return uniqueMoves;
+		int currentEvaluation = Evaluator.evaluateForDetective(state);
+		for(Move move : uniqueMoves) {
+			if(Evaluator.evaluateForDetective(state.advance(move)) > currentEvaluation) {
+				movesToEvaluate.remove(move);
+			}
+		}
+
+		if(movesToEvaluate.size() > 0) return movesToEvaluate;
+		return uniqueMoves;
+	}
+
 	// helper function to check if Mr X move
-	private boolean isMrXMove(Board board) {
-		var moves = board.getAvailableMoves().asList();
+	private boolean isMrXMove(Board.GameState state) {
+		List<Move> moves = state.getAvailableMoves().asList();
 		return moves.stream().anyMatch(x -> x.commencedBy().isMrX());
 	}
 }

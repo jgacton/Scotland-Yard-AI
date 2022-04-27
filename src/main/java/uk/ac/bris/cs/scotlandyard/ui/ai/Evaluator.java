@@ -2,6 +2,7 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import uk.ac.bris.cs.scotlandyard.model.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Evaluator {
 
@@ -29,26 +30,18 @@ public class Evaluator {
         if(state.getSetup().moves.get(state.getMrXTravelLog().size() - 1) && currentShortestPath == 1) return -1000000;
         int totalDistanceToDetectives = getTotalDistanceToDetectives(state, precedingMove.accept(getDestinationFinal));
         int availableMoves = getSumAvailableMoves(state);
+        int distanceToLastRevealedLocation = getDistanceToLastRevealedLocation(state, precedingMove.accept(getDestinationFinal));
 
-        return availableMoves + totalDistanceToDetectives + currentShortestPath;
+        return availableMoves + totalDistanceToDetectives + currentShortestPath + distanceToLastRevealedLocation;
     }
 
     public static int evaluateForDetective(Board.GameState state) {
         var graph = state.getSetup().graph;
+        Optional<Integer> lastMrXLocation = getLastMrXLocation(state);
 
-        List<LogEntry> logbook = state.getMrXTravelLog().asList();
+        if(lastMrXLocation.isEmpty()) return 200 - state.getPlayers().size();
 
-        if(logbook.size() < 3) {
-            return graph.nodes().size() - state.getPlayers().size() + 1;
-        } else {
-            int i = logbook.size() - 1;
-            while(logbook.get(i).location().isEmpty()) {
-                i--;
-            }
-            int lastMrXLocation = logbook.get(i).location().get();
-
-            return getTotalDistanceToDetectives(state, lastMrXLocation);
-        }
+        return getTotalDistanceToDetectives(state, lastMrXLocation.get());
     }
 
     public static int getSumAvailableMoves(Board.GameState state) {
@@ -110,7 +103,7 @@ public class Evaluator {
         return sum;
     }
 
-    private static List<Integer> getDetectiveLocations(Board.GameState state) {
+    public static List<Integer> getDetectiveLocations(Board.GameState state) {
         List<Integer> detectiveLocations = new ArrayList<>();
         for(Piece piece : state.getPlayers()) {
             if(piece.isDetective()) {
@@ -118,5 +111,17 @@ public class Evaluator {
             }
         }
         return detectiveLocations;
+    }
+
+    private static Optional<Integer> getLastMrXLocation(Board.GameState state) {
+        List<LogEntry> withLocations = state.getMrXTravelLog().stream().filter(x -> x.location().isPresent()).toList();
+        if(withLocations.isEmpty()) return Optional.empty();
+        return withLocations.get(withLocations.size()-1).location();
+    }
+
+    private static int getDistanceToLastRevealedLocation(Board.GameState state, int mrXLoc) {
+        if(getLastMrXLocation(state).isEmpty()) return 0;
+        int lastMrXLoc = getLastMrXLocation(state).get();
+        return Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, lastMrXLoc);
     }
 }
