@@ -2,24 +2,21 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import uk.ac.bris.cs.scotlandyard.model.*;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class Evaluator {
 
     public static int evaluateBoard(Board.GameState state, Move precedingMove) {
         if(!state.getWinner().isEmpty()) {
             if(state.getWinner().stream().anyMatch(Piece::isMrX)) {
-                return 1000000;
+                return Integer.MAX_VALUE;
             }
-            return -1000000;
+            return Integer.MIN_VALUE;
         }
 
         if(precedingMove.commencedBy().isMrX()) {
             return evaluateForMrX(state, precedingMove);
         } else {
-            int evaluation = evaluateForDetective(state);
-            System.out.println("Evaluating after detective move: " + evaluation);
-            return evaluation;
+            return evaluateForDetective(state);
         }
     }
 
@@ -27,7 +24,7 @@ public class Evaluator {
         Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 
         int currentShortestPath = getShortestPathToDetective(state, precedingMove.accept(getDestinationFinal));
-        if(state.getSetup().moves.get(state.getMrXTravelLog().size() - 1) && currentShortestPath == 1) return -1000000;
+        if(state.getSetup().moves.get(state.getMrXTravelLog().size() - 1) && currentShortestPath == 1) return Integer.MIN_VALUE;
         int totalDistanceToDetectives = getTotalDistanceToDetectives(state, precedingMove.accept(getDestinationFinal));
         int availableMoves = getSumAvailableMoves(state);
         int distanceToLastRevealedLocation = getDistanceToLastRevealedLocation(state, precedingMove.accept(getDestinationFinal));
@@ -36,7 +33,6 @@ public class Evaluator {
     }
 
     public static int evaluateForDetective(Board.GameState state) {
-        var graph = state.getSetup().graph;
         Optional<Integer> lastMrXLocation = getLastMrXLocation(state);
 
         if(lastMrXLocation.isEmpty()) return 200 - state.getPlayers().size();
@@ -67,7 +63,7 @@ public class Evaluator {
     }
 
     public static int getShortestPathToDetective(Board.GameState state, int mrXLoc) {
-        int currentShortestPath = 1000;
+        int currentShortestPath = Integer.MAX_VALUE;
         List<Integer> detectiveLocations = getDetectiveLocations(state);
         for(int location : detectiveLocations) {
             int pathLength = Dijkstra.getShortestPath(state.getSetup().graph, mrXLoc, location);

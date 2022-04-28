@@ -7,7 +7,7 @@ import io.atlassian.fugue.Pair;
 import uk.ac.bris.cs.scotlandyard.model.*;
 
 public class MyAiParallel implements Ai {
-
+    Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
     @Nonnull @Override public String name() { return "Squeak :)"; }
 
     // Returns move to be played by the AI
@@ -16,18 +16,24 @@ public class MyAiParallel implements Ai {
             Pair<Long, TimeUnit> timeoutPair) {
 
         Board.GameState state = (Board.GameState) board;
-        List<Move> moves = pruneExpensiveAndDuplicateMoves(state);
+        boolean isMrXMove = isMrXMove(state);
+        List<Move> moves;
+
+        if(isMrXMove) moves = pruneMrXMoves(state);
+        else moves = pruneDetectiveMoves(state);
         if(moves.size() == 1) return moves.get(0);
 
         Move bestMove = moves.get(new Random().nextInt(moves.size()));
-        boolean isMrXMove = isMrXMove(state);
 
         List<Callable<Integer>> topLevelCalls = new ArrayList<>();
+
         for(Move moveToEvaluate : moves) {
             GameTree gameTree = new GameTree(state);
             Board.GameState nextState = state.advance(moveToEvaluate);
+
             gameTree.appendGameTree(state, moveToEvaluate, nextState);
-            MiniMaxCallable MM = new MiniMaxCallable(nextState, nextState.getPlayers().size(), isMrXMove(nextState), gameTree, -1000000, 1000000);
+
+            MiniMaxCallable MM = new MiniMaxCallable(nextState, nextState.getPlayers().size(), Integer.MIN_VALUE, Integer.MAX_VALUE, isMrXMove(nextState), gameTree);
 
             topLevelCalls.add(MM);
         }
@@ -40,19 +46,31 @@ public class MyAiParallel implements Ai {
             throw new RuntimeException(e);
         }
 
-        int bestEval = -1000000;
-        for(int i = 0; i < evals.size(); i++) {
-            try {
-                int currentEval = evals.get(i).get();
-                if(isMrXMove && currentEval > bestEval) {
-                    bestEval = evals.get(i).get();
-                    bestMove = moves.get(i);
-                } else if(!isMrXMove && currentEval < Math.abs(bestEval)) {
-                    bestEval = currentEval;
-                    bestMove = moves.get(i);
+        if(isMrXMove) {
+            int maxEval = Integer.MIN_VALUE;
+            for(int i = 0; i < evals.size(); i++) {
+                try {
+                    int currentEval = evals.get(i).get();
+                    if(currentEval > maxEval) {
+                        maxEval = currentEval;
+                        bestMove = moves.get(i);
+                    }
+                } catch(InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
                 }
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            }
+        } else {
+            int minEval = Integer.MAX_VALUE;
+            for(int i = 0; i < evals.size(); i++) {
+                try {
+                    int currentEval = evals.get(i).get();
+                    if(currentEval < minEval) {
+                        minEval = currentEval;
+                        bestMove = moves.get(i);
+                    }
+                } catch(InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
 
@@ -92,6 +110,36 @@ public class MyAiParallel implements Ai {
             cheapMoves.add(cheapestMove);
         }
         return cheapMoves;
+    }
+
+    private List<Move> pruneMrXMoves(Board.GameState state) {
+        List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+        List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+        int currentShortestDistanceToDetective = Evaluator.getShortestPathToDetective(state, uniqueMoves.get(0).source());
+
+        for(Move move : uniqueMoves) {
+            if(Evaluator.getShortestPathToDetective(state.advance(move), move.accept(getDestinationFinal)) < currentShortestDistanceToDetective) {
+                movesToEvaluate.remove(move);
+            }
+        }
+
+        if(movesToEvaluate.size() > 0) return movesToEvaluate;
+        return uniqueMoves;
+    }
+
+    private List<Move> pruneDetectiveMoves(Board.GameState state) {
+        List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+        List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+        if(state.getMrXTravelLog().size() < 3) return uniqueMoves;
+        int currentEvaluation = Evaluator.evaluateForDetective(state);
+        for(Move move : uniqueMoves) {
+            if(Evaluator.evaluateForDetective(state.advance(move)) > currentEvaluation) {
+                movesToEvaluate.remove(move);
+            }
+        }
+
+        if(movesToEvaluate.size() > 0) return movesToEvaluate;
+        return uniqueMoves;
     }
 
     // helper function to check if Mr X move

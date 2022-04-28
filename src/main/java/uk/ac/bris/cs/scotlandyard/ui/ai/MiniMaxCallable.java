@@ -2,6 +2,7 @@ package uk.ac.bris.cs.scotlandyard.ui.ai;
 
 import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
+import uk.ac.bris.cs.scotlandyard.model.Piece;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,132 +11,120 @@ import java.util.concurrent.Callable;
 public class MiniMaxCallable implements Callable<Integer> {
     private final Board.GameState state;
     private final int depth;
-    private final boolean isMrX;
-    private final GameTree tree;
+    private final boolean isMrXMove;
+    private final GameTree gameTree;
     private final int alpha;
     private final int beta;
+    private final Move.Visitor<Integer> getDestinationFinal = new Move.FunctionalVisitor<>((x -> x.destination), (x -> x.destination2));
 
-    public MiniMaxCallable(Board.GameState state, int depth, boolean isMrX, GameTree tree, int alpha, int beta) {
+    public MiniMaxCallable(Board.GameState state, int depth, int alpha, int beta, boolean isMrXMove, GameTree gameTree) {
         this.state = state;
         this.depth = depth;
-        this.isMrX = isMrX;
-        this.tree = tree;
         this.alpha = alpha;
         this.beta = beta;
+        this.isMrXMove = isMrXMove;
+        this.gameTree = gameTree;
     }
 
-    private int minimaxAlphaBetaPruning(Board.GameState state, int depth, GameTree tree, boolean isMrX, int alpha, int beta) {
-        if(depth == 0) {
-            Move whereCameFrom = tree.getMoveWhichGenerated(state);
-            return Evaluator.evaluateBoard(state, whereCameFrom);
+    private int minimax(Board.GameState state, int depth, int alpha, int beta, boolean isMrXMove) {
+        if(depth == 0 || !state.getWinner().isEmpty()) {
+            Move precedingMove = this.gameTree.getMoveWhichGenerated(state);
+            return Evaluator.evaluateBoard(state, precedingMove);
         }
-        if(isMrX) {
-            int maxEval = -1000000;
-            for(Move move : state.getAvailableMoves()) {
-                Board.GameState nextState = state.advance(move);
-                tree.appendGameTree(state, move, nextState);
+        if(isMrXMove) {
+            int maxEval = Integer.MIN_VALUE;
+            List<Move> movesToEvaluate = pruneMrXMoves(state);
 
-                int eval = minimaxAlphaBetaPruning(nextState, depth - 1, tree,  false, alpha, beta);
+            for(Move moveToEvaluate : movesToEvaluate) {
+                Board.GameState nextState = state.advance(moveToEvaluate);
+                this.gameTree.appendGameTree(state, moveToEvaluate, nextState);
+                int currentEval = minimax(nextState, depth - 1, alpha, beta, false);
 
-                if(eval > maxEval) maxEval = eval;
-                if(eval > alpha) alpha = eval;
+                if(currentEval > maxEval) maxEval = currentEval;
+                if(currentEval > alpha) alpha = currentEval;
                 if(beta <= alpha) break;
             }
+
             return maxEval;
         } else {
-            int minEval = 1000000;
-            int numOfDetectives = state.getPlayers().size() - 1;
-            int firstLevelMoves = state.getAvailableMoves().size();
-            int i = 0;
-            while(i < firstLevelMoves) {
-                Board.GameState dOneState = state.advance(state.getAvailableMoves().stream().toList().get(i));
-                tree.appendGameTree(state, state.getAvailableMoves().stream().toList().get(i), dOneState);
-                if(numOfDetectives >= 2) {
-                    int secondLevelMoves = dOneState.getAvailableMoves().size();
-                    int j = 0;
-                    while(j < secondLevelMoves) {
-                        Board.GameState dTwoState = dOneState.advance(dOneState.getAvailableMoves().stream().toList().get(j));
-                        tree.appendGameTree(dOneState, state.getAvailableMoves().stream().toList().get(i), dTwoState);
-                        if(numOfDetectives >= 3) {
-                            int thirdLevelMoves = dTwoState.getAvailableMoves().size();
-                            int k = 0;
-                            while(k < thirdLevelMoves) {
-                                Board.GameState dThreeState = dTwoState.advance(dTwoState.getAvailableMoves().stream().toList().get(k));
-                                tree.appendGameTree(dTwoState, state.getAvailableMoves().stream().toList().get(i), dThreeState);
-                                if(numOfDetectives >= 4) {
-                                    int fourthLevelMoves = dThreeState.getAvailableMoves().size();
-                                    int l = 0;
-                                    while(l < fourthLevelMoves) {
-                                        Board.GameState dFourState = dThreeState.advance(dThreeState.getAvailableMoves().stream().toList().get(l));
-                                        tree.appendGameTree(dThreeState, state.getAvailableMoves().stream().toList().get(i), dFourState);
-                                        if(numOfDetectives >= 5) {
-                                            int fifthLevelMoves = dFourState.getAvailableMoves().size();
-                                            int m = 0;
-                                            while(m < fifthLevelMoves) {
-                                                Board.GameState dFiveState = dFourState.advance(dFourState.getAvailableMoves().stream().toList().get(m));
-                                                tree.appendGameTree(dFourState, state.getAvailableMoves().stream().toList().get(i), dFiveState);
-                                                int eval = minimaxAlphaBetaPruning(dFiveState, depth - 1, tree, isMrXMove(dFiveState), alpha, beta);
-                                                if(eval < minEval) minEval = eval;
-                                                if(eval < beta) beta = eval;
-                                                if(beta <= alpha) break;
-                                                m++;
-                                            }
-                                        } else {
-                                            int eval = minimaxAlphaBetaPruning(dFourState, depth - 1, tree, isMrXMove(dFourState), alpha, beta);
-                                            if(eval < minEval) minEval = eval;
-                                            if(eval < beta) beta = eval;
-                                            if(beta <= alpha) break;
-                                        }
-                                        if(beta <= alpha) break;
-                                        l++;
-                                    }
-                                } else {
-                                    int eval = minimaxAlphaBetaPruning(dThreeState, depth - 1, tree, isMrXMove(dThreeState), alpha, beta);
-                                    if(eval < minEval) minEval = eval;
-                                    if(eval < beta) beta = eval;
-                                    if(beta <= alpha) break;
-                                }
-                                if(beta <= alpha) break;
-                                k++;
-                            }
-                        } else {
-                            int eval = minimaxAlphaBetaPruning(dTwoState, depth - 1, tree, isMrXMove(dTwoState), alpha, beta);
-                            if(eval < minEval) minEval = eval;
-                            if(eval < beta) beta = eval;
-                            if(beta <= alpha) break;
-                        }
-                        if(beta <= alpha) break;
-                        j++;
-                    }
-                } else {
-                    int eval = minimaxAlphaBetaPruning(dOneState, depth - 1, tree, isMrXMove(dOneState), alpha, beta);
-                    if(eval < minEval) minEval = eval;
-                    if(eval < beta) beta = eval;
-                    if(beta <= alpha) break;
-                }
+            int minEval = Integer.MAX_VALUE;
+            List<Move> movesToEvaluate = pruneDetectiveMoves(state);
+
+            for(Move moveToEvaluate : movesToEvaluate) {
+                Board.GameState nextState = state.advance(moveToEvaluate);
+                this.gameTree.appendGameTree(state, moveToEvaluate, nextState);
+                int currentEval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
+
+                if(currentEval < minEval) minEval = currentEval;
+                if(currentEval < beta) beta = currentEval;
                 if(beta <= alpha) break;
-                i++;
             }
+
             return minEval;
         }
     }
 
-    private List<Move> pruneExpensiveMoves(Board.GameState state) {
-        List<Move> moves = state.getAvailableMoves().asList();
-        List<Move> cheapMoves = new ArrayList<>(List.copyOf(moves));
-
-        for(int i = 0; i < moves.size() - 1; i++) {
-            Move move1 = moves.get(i);
-            for(int j = i + 1; j < moves.size(); j++) {
-                Move move2 = moves.get(j);
-
-                if(Evaluator.getTicketCostOfMove(move1) <= Evaluator.getTicketCostOfMove(move2)) {
-                    cheapMoves.remove(move2);
+    private List<Move> pruneExpensiveAndDuplicateMoves(Board.GameState state) {
+        List<Integer> nodesVisited = new ArrayList<>();
+        List<Move> movesToPrune = new ArrayList<>(List.copyOf(state.getAvailableMoves()));
+        // Gets list of unique destination nodes for all moves in this state
+        for(Move move : movesToPrune) {
+            boolean occupied = false;
+            for(Piece piece : state.getPlayers()) {
+                if(piece.isDetective()) {
+                    if(state.getDetectiveLocation((Piece.Detective) piece).orElseThrow().equals(move.accept(getDestinationFinal))) occupied = true;
                 }
+            }
+
+            if(!occupied && !nodesVisited.contains(move.accept(getDestinationFinal))) {
+                nodesVisited.add(move.accept(getDestinationFinal));
             }
         }
 
+        List<Move> cheapMoves = new ArrayList<>();
+        // For each unique destination node, finds the move with the lowest ticket cost.
+        for(int n : nodesVisited) {
+            Move cheapestMove = movesToPrune.get(0);
+            int cheapestCost = 100;
+            for(Move move : movesToPrune) {
+                if(n == move.accept(getDestinationFinal) && Evaluator.getTicketCostOfMove(move) < cheapestCost) {
+                    cheapestCost = Evaluator.getTicketCostOfMove(move);
+                    cheapestMove = move;
+                }
+            }
+            cheapMoves.add(cheapestMove);
+        }
         return cheapMoves;
+    }
+
+    private List<Move> pruneMrXMoves(Board.GameState state) {
+        List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+        List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+        int currentShortestDistanceToDetective = Evaluator.getShortestPathToDetective(state, uniqueMoves.get(0).source());
+
+        for(Move move : uniqueMoves) {
+            if(Evaluator.getShortestPathToDetective(state.advance(move), move.accept(getDestinationFinal)) < currentShortestDistanceToDetective) {
+                movesToEvaluate.remove(move);
+            }
+        }
+
+        if(movesToEvaluate.size() > 0) return movesToEvaluate;
+        return uniqueMoves;
+    }
+
+    private List<Move> pruneDetectiveMoves(Board.GameState state) {
+        List<Move> uniqueMoves = pruneExpensiveAndDuplicateMoves(state);
+        List<Move> movesToEvaluate = new ArrayList<>(List.copyOf(uniqueMoves));
+        if(state.getMrXTravelLog().size() < 3) return uniqueMoves;
+        int currentEvaluation = Evaluator.evaluateForDetective(state);
+        for(Move move : uniqueMoves) {
+            if(Evaluator.evaluateForDetective(state.advance(move)) > currentEvaluation) {
+                movesToEvaluate.remove(move);
+            }
+        }
+
+        if(movesToEvaluate.size() > 0) return movesToEvaluate;
+        return uniqueMoves;
     }
 
     private boolean isMrXMove(Board board) {
@@ -144,6 +133,6 @@ public class MiniMaxCallable implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        return minimaxAlphaBetaPruning(this.state, this.depth, this.tree, this.isMrX, this.alpha, this.beta);
+        return minimax(this.state, this.depth, this.alpha, this.beta, this.isMrXMove);
     }
 }

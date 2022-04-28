@@ -19,6 +19,7 @@ public class MyAi implements Ai {
 		Board.GameState state = (Board.GameState) board;
 		boolean isMrXMove = isMrXMove(state);
 		List<Move> moves;
+
 		if(isMrXMove) moves = pruneMrXMoves(state);
 		else moves = pruneDetectiveMoves(state);
 		if(moves.size() == 1) return moves.get(0);
@@ -26,20 +27,32 @@ public class MyAi implements Ai {
 		Move bestMove = moves.get(new Random().nextInt(moves.size()));
 
 		this.gameTree = new GameTree(state);
-		int bestEval = -1000000;
+		System.out.println("Moves in position: " + state.getAvailableMoves().size());
+		System.out.println("Moves to evaluate: " + moves.size());
 
-		for(Move moveToEvaluate : moves) {
-			Board.GameState nextState = state.advance(moveToEvaluate);
-			gameTree.appendGameTree(state, moveToEvaluate, nextState);
+		if(isMrXMove) {
+			int maxEval = Integer.MIN_VALUE;
+			for(Move moveToEvaluate : moves) {
+				Board.GameState nextState = state.advance(moveToEvaluate);
+				gameTree.appendGameTree(state, moveToEvaluate, nextState);
+				int currentEval = minimax(nextState, state.getPlayers().size(), Integer.MIN_VALUE, Integer.MAX_VALUE, false);
 
-			int currentEval = minimax(nextState, state.getPlayers().size(), -1000000, 1000000, isMrXMove(nextState));
+				if(currentEval > maxEval) {
+					maxEval = currentEval;
+					bestMove = moveToEvaluate;
+				}
+			}
+		} else {
+			int minEval = Integer.MAX_VALUE;
+			for(Move moveToEvaluate : moves) {
+				Board.GameState nextState = state.advance(moveToEvaluate);
+				gameTree.appendGameTree(state, moveToEvaluate, nextState);
+				int currentEval = minimax(nextState, state.getPlayers().size(), Integer.MIN_VALUE, Integer.MAX_VALUE, isMrXMove(nextState));
 
-			if(isMrXMove && currentEval > bestEval) {
-				bestEval = currentEval;
-				bestMove = moveToEvaluate;
-			} else if(!isMrXMove && currentEval < Math.abs(bestEval)) {
-				bestEval = currentEval;
-				bestMove = moveToEvaluate;
+				if(currentEval < minEval) {
+					minEval = currentEval;
+					bestMove = moveToEvaluate;
+				}
 			}
 		}
 		return bestMove;
@@ -52,28 +65,37 @@ public class MyAi implements Ai {
 			return Evaluator.evaluateBoard(state, precedingMove);
 		}
 
-		int bestEval = -1000000;
-		List<Move> moves;
-		if(isMrXMove) moves = pruneMrXMoves(state);
-		else moves = pruneDetectiveMoves(state);
+		if(isMrXMove) {
+			int maxEval = Integer.MIN_VALUE;
+			List<Move> movesToEvaluate = pruneMrXMoves(state);
 
-		for(Move move : moves) {
-			Board.GameState nextState = state.advance(move);
-			this.gameTree.appendGameTree(state, move, nextState);
-			int eval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
+			for(Move moveToEvaluate : movesToEvaluate) {
+				Board.GameState nextState = state.advance(moveToEvaluate);
+				this.gameTree.appendGameTree(state, moveToEvaluate, nextState);
+				int currentEval = minimax(nextState, depth - 1, alpha, beta, false);
 
-			if(isMrXMove) {
-				if(eval > bestEval) bestEval = eval;
-				if(eval > alpha) alpha = eval;
-			} else {
-				if(eval < Math.abs(bestEval)) bestEval = eval;
-				if(eval < beta) beta = eval;
+				if(currentEval > maxEval) maxEval = currentEval;
+				if(currentEval > alpha) alpha = currentEval;
+				if(beta <= alpha) break;
 			}
 
-			if(beta <= alpha) break;
-		}
+			return maxEval;
+		} else {
+			int minEval = Integer.MAX_VALUE;
+			List<Move> movesToEvaluate = pruneDetectiveMoves(state);
 
-		return bestEval;
+			for(Move moveToEvaluate : movesToEvaluate) {
+				Board.GameState nextState = state.advance(moveToEvaluate);
+				this.gameTree.appendGameTree(state, moveToEvaluate, nextState);
+				int currentEval = minimax(nextState, depth - 1, alpha, beta, isMrXMove(nextState));
+
+				if(currentEval < minEval) minEval = currentEval;
+				if(currentEval < beta) beta = currentEval;
+				if(beta <= alpha) break;
+			}
+
+			return minEval;
+		}
 	}
 
 	private List<Move> pruneExpensiveAndDuplicateMoves(Board.GameState state) {
@@ -115,7 +137,7 @@ public class MyAi implements Ai {
 		int currentShortestDistanceToDetective = Evaluator.getShortestPathToDetective(state, uniqueMoves.get(0).source());
 
 		for(Move move : uniqueMoves) {
-			if(Evaluator.getTotalDistanceToDetectives(state.advance(move), move.accept(getDestinationFinal)) < currentShortestDistanceToDetective) {
+			if(Evaluator.getShortestPathToDetective(state.advance(move), move.accept(getDestinationFinal)) < currentShortestDistanceToDetective) {
 				movesToEvaluate.remove(move);
 			}
 		}
